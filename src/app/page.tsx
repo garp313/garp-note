@@ -84,7 +84,22 @@ export default function NoteFlowPage() {
   const [renameVal, setRenameVal] = useState('');
   const openRename = useCallback(() => {
     if (!ctx.target) return;
-    // Export PDF
+    const activNb = getActivNb();
+    let cur = '';
+    if (ctx.target.type === 'nb') cur = data.notebooks.find(n => n.id === ctx.target!.id)?.name ?? '';
+    else if (ctx.target.type === 'sec') cur = activNb?.sections.find(s => s.id === ctx.target!.id)?.name ?? '';
+    else cur = getActivSec()?.pages.find(p => p.id === ctx.target!.id)?.title ?? '';
+    setRenameVal(cur);
+    setRenameModal(true);
+    closeCtx();
+  }, [ctx.target, data, getActivNb, getActivSec, closeCtx]);
+
+  const confirmRename = useCallback(() => {
+    if (ctx.target && renameVal.trim()) renameItem(ctx.target, renameVal.trim());
+    setRenameModal(false);
+  }, [ctx.target, renameVal, renameItem]);
+
+  // Export PDF
   const handleExport = useCallback(() => {
     if (!ctx.target) return;
     flushEditor();
@@ -101,21 +116,6 @@ export default function NoteFlowPage() {
     }
     showToast('Gerando PDF...');
   }, [ctx.target, data, flushEditor, showToast]);
-
-  const activNb = getActivNb();
-    let cur = '';
-    if (ctx.target.type === 'nb') cur = data.notebooks.find(n => n.id === ctx.target!.id)?.name ?? '';
-    else if (ctx.target.type === 'sec') cur = activNb?.sections.find(s => s.id === ctx.target!.id)?.name ?? '';
-    else cur = getActivSec()?.pages.find(p => p.id === ctx.target!.id)?.title ?? '';
-    setRenameVal(cur);
-    setRenameModal(true);
-    closeCtx();
-  }, [ctx.target, data, getActivNb, getActivSec, closeCtx]);
-
-  const confirmRename = useCallback(() => {
-    if (ctx.target && renameVal.trim()) renameItem(ctx.target, renameVal.trim());
-    setRenameModal(false);
-  }, [ctx.target, renameVal, renameItem]);
 
   // Delete
   const handleDelete = useCallback(() => {
@@ -201,8 +201,6 @@ export default function NoteFlowPage() {
     }
     showToast('Gerando PDF...');
   }, [ctx.target, data, flushEditor, showToast]);
-
-  const activNb = getActivNb();
   const activSec = getActivSec();
   const activPage = getActivPage();
 
