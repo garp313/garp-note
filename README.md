@@ -1,4 +1,4 @@
-# 📒 NoteFlow Universitário
+# 📒 Garp Note
 
 Aplicativo completo de anotações universitárias, construído com **Next.js 14**, **TypeScript** e sem dependências extras.
 
