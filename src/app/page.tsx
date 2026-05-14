@@ -82,6 +82,9 @@ export default function NoteFlowPage() {
   // Rename modal
   const [renameModal, setRenameModal] = useState(false);
   const [renameVal, setRenameVal] = useState('');
+  // Guarda o target no momento em que o modal abre (closeCtx limpa ctx.target)
+  const [renameTarget, setRenameTarget] = useState<ContextTarget | null>(null);
+
   const openRename = useCallback(() => {
     if (!ctx.target) return;
     const activNb = getActivNb();
@@ -90,14 +93,16 @@ export default function NoteFlowPage() {
     else if (ctx.target.type === 'sec') cur = activNb?.sections.find(s => s.id === ctx.target!.id)?.name ?? '';
     else cur = getActivSec()?.pages.find(p => p.id === ctx.target!.id)?.title ?? '';
     setRenameVal(cur);
+    setRenameTarget(ctx.target); // salva antes do closeCtx zerar
     setRenameModal(true);
     closeCtx();
   }, [ctx.target, data, getActivNb, getActivSec, closeCtx]);
 
   const confirmRename = useCallback(() => {
-    if (ctx.target && renameVal.trim()) renameItem(ctx.target, renameVal.trim());
+    if (renameTarget && renameVal.trim()) renameItem(renameTarget, renameVal.trim());
     setRenameModal(false);
-  }, [ctx.target, renameVal, renameItem]);
+    setRenameTarget(null);
+  }, [renameTarget, renameVal, renameItem]);
 
   // Export PDF
   const handleExport = useCallback(() => {
@@ -184,23 +189,7 @@ export default function NoteFlowPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Export PDF
-  const handleExport = useCallback(() => {
-    if (!ctx.target) return;
-    flushEditor();
-    const nb = data.notebooks.find(n => n.id === (ctx.target?.type === 'nb' ? ctx.target.id : data.activeNb));
-    if (ctx.target.type === 'nb' && nb) {
-      exportNotebook(nb);
-    } else if (ctx.target.type === 'sec') {
-      const sec = nb?.sections.find(s => s.id === ctx.target?.id);
-      if (sec) exportSection(sec);
-    } else if (ctx.target.type === 'page') {
-      const sec = nb?.sections.find(s => s.pages.some(p => p.id === ctx.target?.id));
-      const page = sec?.pages.find(p => p.id === ctx.target?.id);
-      if (page) exportPage(page);
-    }
-    showToast('Gerando PDF...');
-  }, [ctx.target, data, flushEditor, showToast]);
+  const activNb = getActivNb();
   const activSec = getActivSec();
   const activPage = getActivPage();
 
