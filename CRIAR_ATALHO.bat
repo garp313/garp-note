@@ -2,7 +2,6 @@
 chcp 65001 >nul
 title Garp Note - Criar Atalho
 
-REM Pega o diretorio onde este .bat esta rodando (o proprio projeto)
 set "PROJETO=%~dp0"
 if "%PROJETO:~-1%"=="\" set "PROJETO=%PROJETO:~0,-1%"
 
@@ -16,17 +15,16 @@ echo ==========================================
 echo   Garp Note  -  Criar Atalho
 echo ==========================================
 echo.
-echo  Pasta do projeto detectada:
-echo  %PROJETO%
-echo.
 
-REM Cria o .vbs que inicia tudo sem abrir janela de terminal
+REM Cria o .vbs: libera porta 3000, inicia servidor, abre navegador
 echo Set ws = CreateObject("WScript.Shell") > "%VBS%"
 echo ws.CurrentDirectory = "%PROJETO%" >> "%VBS%"
-echo ws.Run "cmd /c cd /d ""%PROJETO%"" && timeout /t 3 /nobreak >nul && start http://localhost:3000", 0, False >> "%VBS%"
+echo ws.Run "cmd /c for /f ""tokens=5"" %%a in ('netstat -ano ^| findstr :3000') do taskkill /PID %%a /F >nul 2>&1", 0, True >> "%VBS%"
 echo ws.Run "cmd /c cd /d ""%PROJETO%"" && npm run dev", 0, False >> "%VBS%"
+echo WScript.Sleep 8000 >> "%VBS%"
+echo ws.Run "cmd /c start http://localhost:3000", 0, False >> "%VBS%"
 
-REM Cria o atalho via PowerShell
+REM Cria o atalho
 echo $ws = New-Object -ComObject WScript.Shell > "%PS%"
 echo $s = $ws.CreateShortcut("%ATALHO%") >> "%PS%"
 echo $s.TargetPath = "wscript.exe" >> "%PS%"
@@ -41,17 +39,13 @@ del /q "%PS%" 2>nul
 
 if exist "%ATALHO%" (
     echo.
-    echo  ==========================================
-    echo   Atalho criado com sucesso!
-    echo  ==========================================
-    echo.
-    echo   Icone "Garp Note" na area de trabalho.
-    echo   Duplo clique para abrir o app!
+    echo  Atalho criado com sucesso!
+    echo  Duplo clique para abrir o Garp Note.
     echo.
 ) else (
     echo.
-    echo   [ERRO] Clique com botao direito e escolha
-    echo   "Executar como Administrador".
+    echo  [ERRO] Clique com botao direito e escolha
+    echo  "Executar como Administrador".
     echo.
 )
 pause
