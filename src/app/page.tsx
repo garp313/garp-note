@@ -9,6 +9,7 @@ import { Editor } from '@/components/Editor';
 import { Modal, ColorPicker } from '@/components/Modal';
 import { ContextMenu } from '@/components/ContextMenu';
 import { COLORS } from '@/lib/data';
+import { exportPage, exportSection, exportNotebook } from '@/lib/exportPdf';
 import { ContextTarget } from '@/types';
 
 export default function NoteFlowPage() {
@@ -83,7 +84,25 @@ export default function NoteFlowPage() {
   const [renameVal, setRenameVal] = useState('');
   const openRename = useCallback(() => {
     if (!ctx.target) return;
-    const activNb = getActivNb();
+    // Export PDF
+  const handleExport = useCallback(() => {
+    if (!ctx.target) return;
+    flushEditor();
+    const nb = data.notebooks.find(n => n.id === (ctx.target?.type === 'nb' ? ctx.target.id : data.activeNb));
+    if (ctx.target.type === 'nb' && nb) {
+      exportNotebook(nb);
+    } else if (ctx.target.type === 'sec') {
+      const sec = nb?.sections.find(s => s.id === ctx.target?.id);
+      if (sec) exportSection(sec);
+    } else if (ctx.target.type === 'page') {
+      const sec = nb?.sections.find(s => s.pages.some(p => p.id === ctx.target?.id));
+      const page = sec?.pages.find(p => p.id === ctx.target?.id);
+      if (page) exportPage(page);
+    }
+    showToast('Gerando PDF...');
+  }, [ctx.target, data, flushEditor, showToast]);
+
+  const activNb = getActivNb();
     let cur = '';
     if (ctx.target.type === 'nb') cur = data.notebooks.find(n => n.id === ctx.target!.id)?.name ?? '';
     else if (ctx.target.type === 'sec') cur = activNb?.sections.find(s => s.id === ctx.target!.id)?.name ?? '';
@@ -164,6 +183,24 @@ export default function NoteFlowPage() {
   }, [editorRef, flushEditor]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Export PDF
+  const handleExport = useCallback(() => {
+    if (!ctx.target) return;
+    flushEditor();
+    const nb = data.notebooks.find(n => n.id === (ctx.target?.type === 'nb' ? ctx.target.id : data.activeNb));
+    if (ctx.target.type === 'nb' && nb) {
+      exportNotebook(nb);
+    } else if (ctx.target.type === 'sec') {
+      const sec = nb?.sections.find(s => s.id === ctx.target?.id);
+      if (sec) exportSection(sec);
+    } else if (ctx.target.type === 'page') {
+      const sec = nb?.sections.find(s => s.pages.some(p => p.id === ctx.target?.id));
+      const page = sec?.pages.find(p => p.id === ctx.target?.id);
+      if (page) exportPage(page);
+    }
+    showToast('Gerando PDF...');
+  }, [ctx.target, data, flushEditor, showToast]);
 
   const activNb = getActivNb();
   const activSec = getActivSec();
@@ -259,6 +296,7 @@ export default function NoteFlowPage() {
           onClose={closeCtx}
           onRename={openRename}
           onDelete={handleDelete}
+          onExport={handleExport}
         />
       )}
 

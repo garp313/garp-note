@@ -526,6 +526,7 @@ html.dark .editor-content pre { background-color: var(--panel) !important; }
 }
 .ctx-item:hover { background: var(--tag); }
 .ctx-item.danger { color: #c0392b; }
+.ctx-divider { height: 0.5px; background: var(--border); margin: 4px 0; }
 
 /* MODAL */
 .modal-backdrop {

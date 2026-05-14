@@ -10,9 +10,10 @@ interface ContextMenuProps {
   onClose: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onExport: () => void;
 }
 
-export function ContextMenu({ x, y, target, onClose, onRename, onDelete }: ContextMenuProps) {
+export function ContextMenu({ x, y, target, onClose, onRename, onDelete, onExport }: ContextMenuProps) {
   useEffect(() => {
     const handler = () => onClose();
     document.addEventListener('click', handler);
@@ -25,6 +26,11 @@ export function ContextMenu({ x, y, target, onClose, onRename, onDelete }: Conte
 
   if (!target) return null;
 
+  const exportLabel =
+    target.type === 'nb' ? '📥 Exportar caderno (PDF)' :
+    target.type === 'sec' ? '📥 Exportar seção (PDF)' :
+    '📥 Exportar página (PDF)';
+
   return (
     <div
       className="ctx-menu"
@@ -32,6 +38,8 @@ export function ContextMenu({ x, y, target, onClose, onRename, onDelete }: Conte
       onClick={e => e.stopPropagation()}
     >
       <div className="ctx-item" onClick={onRename}>✏️ Renomear</div>
+      <div className="ctx-item" onClick={() => { onExport(); onClose(); }}>{exportLabel}</div>
+      <div className="ctx-divider" />
       <div className="ctx-item danger" onClick={onDelete}>🗑 Excluir</div>
     </div>
   );
