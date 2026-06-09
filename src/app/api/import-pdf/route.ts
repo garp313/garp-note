@@ -96,7 +96,7 @@ Nome do arquivo: ${fileName}`;
     if (!response.ok) {
       const err = await response.text();
       console.error('Anthropic API error:', err);
-      return NextResponse.json({ error: 'Erro ao processar com IA' }, { status: 500 });
+      return NextResponse.json({ error: 'Erro ao processar com IA: ' + err }, { status: 500 });
     }
 
     const data = await response.json();
