@@ -67,7 +67,7 @@ Nome do arquivo: ${fileName}`;
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-5',
+        model: 'claude-sonnet-4-6',
         max_tokens: 8000,
         messages: [
           {
