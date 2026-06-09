@@ -8,6 +8,7 @@ import { PagesList } from '@/components/PagesList';
 import { Editor } from '@/components/Editor';
 import { Modal, ColorPicker } from '@/components/Modal';
 import { ContextMenu } from '@/components/ContextMenu';
+import { ImportPDF, ImportedNotebook } from '@/components/ImportPDF';
 import { COLORS } from '@/lib/data';
 import { exportPage, exportSection, exportNotebook } from '@/lib/exportPdf';
 import { ContextTarget } from '@/types';
@@ -28,8 +29,6 @@ export default function NoteFlowPage() {
     const isDark = saved === '1';
     if (isDark) {
       setDark(true);
-      // Aplica no <html> para as variáveis CSS cascatearem corretamente
-      // no contentEditable e em todo o documento
       document.documentElement.classList.add('dark');
     }
   }, []);
@@ -37,7 +36,6 @@ export default function NoteFlowPage() {
     const next = !dark;
     setDark(next);
     localStorage.setItem('nf_dark', next ? '1' : '0');
-    // Sincroniza com o <html> além da div.app
     document.documentElement.classList.toggle('dark', next);
   };
 
@@ -82,7 +80,6 @@ export default function NoteFlowPage() {
   // Rename modal
   const [renameModal, setRenameModal] = useState(false);
   const [renameVal, setRenameVal] = useState('');
-  // Guarda o target no momento em que o modal abre (closeCtx limpa ctx.target)
   const [renameTarget, setRenameTarget] = useState<ContextTarget | null>(null);
 
   const openRename = useCallback(() => {
@@ -93,7 +90,7 @@ export default function NoteFlowPage() {
     else if (ctx.target.type === 'sec') cur = activNb?.sections.find(s => s.id === ctx.target!.id)?.name ?? '';
     else cur = getActivSec()?.pages.find(p => p.id === ctx.target!.id)?.title ?? '';
     setRenameVal(cur);
-    setRenameTarget(ctx.target); // salva antes do closeCtx zerar
+    setRenameTarget(ctx.target);
     setRenameModal(true);
     closeCtx();
   }, [ctx.target, data, getActivNb, getActivSec, closeCtx]);
@@ -161,6 +158,37 @@ export default function NoteFlowPage() {
     setMathModal(false); setMathVal('');
   };
 
+  // Import PDF modal
+  const [importModal, setImportModal] = useState(false);
+  const handleImportPDF = useCallback((imported: ImportedNotebook) => {
+    const now = new Date().toLocaleDateString('pt-BR');
+    const ts = Date.now();
+    const newNb = {
+      id: 'nb' + ts,
+      name: imported.notebookName,
+      color: imported.notebookColor,
+      sections: imported.sections.map((sec, si) => ({
+        id: 's' + ts + si,
+        name: sec.name,
+        color: sec.color,
+        pages: sec.pages.map((pg, pi) => ({
+          id: 'p' + ts + si + pi,
+          title: pg.title,
+          content: pg.content,
+          date: now,
+        })),
+      })),
+    };
+    updateData(prev => ({
+      ...prev,
+      notebooks: [...prev.notebooks, newNb],
+      activeNb: newNb.id,
+      activeSec: newNb.sections[0]?.id ?? null,
+      activePage: newNb.sections[0]?.pages[0]?.id ?? null,
+    }));
+    showToast('📥 Caderno importado com sucesso!');
+  }, [updateData, showToast]);
+
   // Search
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -224,6 +252,7 @@ export default function NoteFlowPage() {
             </div>
           )}
         </div>
+        <button className="top-btn" onClick={() => setImportModal(true)}>📥 Importar PDF</button>
         <button className="top-btn" onClick={() => setNbModal(true)}>+ Caderno</button>
         <button className="top-btn" onClick={() => fileInputRef.current?.click()}>📎 Anexar</button>
         <input ref={fileInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAttach(f); e.target.value = ''; }} />
@@ -368,6 +397,14 @@ export default function NoteFlowPage() {
         <span className="modal-label">Prévia:</span>
         <div className="math-preview">{mathVal || '...'}</div>
       </Modal>
+
+      {/* MODAL: Importar PDF */}
+      {importModal && (
+        <ImportPDF
+          onImport={handleImportPDF}
+          onClose={() => setImportModal(false)}
+        />
+      )}
 
       {/* TOAST */}
       {toast.msg && <div key={toast.k} className="toast">{toast.msg}</div>}
