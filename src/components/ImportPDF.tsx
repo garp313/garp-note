@@ -32,7 +32,14 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
-async function extractPages(file: File): Promise<{ pages: string[]; title: string }> {
+interface TextItem {
+  str: string;
+  transform: number[];
+  height: number;
+  fontName: string;
+}
+
+async function extractStructuredPages(file: File): Promise<{ pages: StructuredPage[]; title: string }> {
   await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
   const pdfjsLib = (window as any).pdfjsLib;
   pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -40,42 +47,110 @@ async function extractPages(file: File): Promise<{ pages: string[]; title: strin
 
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  const pages: string[] = [];
+  const pages: StructuredPage[] = [];
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const text = content.items.map((it: any) => it.str).join(' ').trim();
-    pages.push(text);
+    const items: TextItem[] = content.items as TextItem[];
+    pages.push(parsePageItems(items));
   }
 
   const title = file.name.replace(/\.pdf$/i, '').replace(/[-_]/g, ' ');
   return { pages, title };
 }
 
-function buildNotebook(pages: string[], title: string): ImportedNotebook {
-  const PER_SECTION = 4;
-  const sections = [];
+interface StructuredPage {
+  lines: { text: string; isTitle: boolean; isBullet: boolean; fontSize: number }[];
+}
 
-  for (let i = 0; i < pages.length; i += PER_SECTION) {
-    const chunk = pages.slice(i, i + PER_SECTION);
-    const secNum = Math.floor(i / PER_SECTION) + 1;
+function parsePageItems(items: TextItem[]): StructuredPage {
+  if (!items.length) return { lines: [] };
 
-    const built = chunk.map((text, pi) => {
-      const pageNum = i + pi + 1;
-      const lines = text.split(/\s{3,}/).filter(l => l.trim().length > 0);
-      const detectedTitle = lines[0]?.slice(0, 60).trim() || `Página ${pageNum}`;
-      const body = lines.slice(1).join(' ') || text;
-      const chunks = body.match(/.{1,400}(\s|$)/g) || [body];
-      const html = chunks.filter(c => c.trim().length > 10).map(c => `<p>${c.trim()}</p>`).join('');
-      return { title: detectedTitle || `Página ${pageNum}`, content: html || `<p>${text.slice(0, 500)}</p>` };
-    });
+  // Calcula tamanho médio de fonte para detectar títulos
+  const heights = items.map(i => i.height).filter(h => h > 0);
+  const avgHeight = heights.reduce((a, b) => a + b, 0) / (heights.length || 1);
 
-    sections.push({
-      name: sections.length === 0 && pages.length <= PER_SECTION ? 'Conteúdo' : `Parte ${secNum}`,
-      color: COLORS[secNum % COLORS.length],
-      pages: built,
-    });
+  // Agrupa itens em linhas por posição Y
+  const lineMap = new Map<number, TextItem[]>();
+  items.forEach(item => {
+    const y = Math.round(item.transform[5]);
+    if (!lineMap.has(y)) lineMap.set(y, []);
+    lineMap.get(y)!.push(item);
+  });
+
+  const sortedYs = Array.from(lineMap.keys()).sort((a, b) => b - a);
+  const lines: StructuredPage['lines'] = [];
+
+  sortedYs.forEach(y => {
+    const lineItems = lineMap.get(y)!.sort((a, b) => a.transform[4] - b.transform[4]);
+    const text = lineItems.map(i => i.str).join(' ').trim();
+    if (!text) return;
+
+    const fontSize = Math.max(...lineItems.map(i => i.height));
+    const isTitle = fontSize > avgHeight * 1.2 || (text.length < 80 && fontSize >= avgHeight * 1.1);
+    const isBullet = /^[•\-\*●▪►]\s/.test(text) || /^\d+\.\s/.test(text);
+
+    lines.push({ text, isTitle, isBullet, fontSize });
+  });
+
+  return { lines };
+}
+
+function pagesToHTML(page: StructuredPage): string {
+  let html = '';
+  let inList = false;
+
+  page.lines.forEach(line => {
+    if (!line.text.trim()) return;
+
+    if (line.isTitle && !line.isBullet) {
+      if (inList) { html += '</ul>'; inList = false; }
+      const tag = line.fontSize > 16 ? 'h2' : 'h3';
+      html += `<${tag}>${line.text}</${tag}>`;
+    } else if (line.isBullet) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      const clean = line.text.replace(/^[•\-\*●▪►]\s+/, '').replace(/^\d+\.\s+/, '');
+      html += `<li>${clean}</li>`;
+    } else {
+      if (inList) { html += '</ul>'; inList = false; }
+      html += `<p>${line.text}</p>`;
+    }
+  });
+
+  if (inList) html += '</ul>';
+  return html;
+}
+
+function buildNotebook(pages: StructuredPage[], title: string): ImportedNotebook {
+  // Detecta seções por títulos grandes entre páginas
+  const sections: { name: string; color: string; pages: { title: string; content: string }[] }[] = [];
+  let currentSection: typeof sections[0] | null = null;
+
+  // Cada página do PDF vira uma página no caderno
+  pages.forEach((pg, idx) => {
+    // Primeiro título grande da página vira nome da página
+    const firstTitle = pg.lines.find(l => l.isTitle)?.text || `Página ${idx + 1}`;
+    const html = pagesToHTML(pg);
+    if (!html.trim()) return;
+
+    // A cada 4 páginas (ou quando há título muito grande) cria nova seção
+    const isNewSection = idx % 4 === 0;
+    if (isNewSection || !currentSection) {
+      const secNum = sections.length + 1;
+      currentSection = {
+        name: firstTitle.slice(0, 40) || `Parte ${secNum}`,
+        color: COLORS[sections.length % COLORS.length],
+        pages: [],
+      };
+      sections.push(currentSection);
+    }
+
+    currentSection.pages.push({ title: firstTitle.slice(0, 60), content: html });
+  });
+
+  if (!sections.length) {
+    sections.push({ name: 'Conteúdo', color: COLORS[0], pages: [{ title: title, content: '<p>PDF sem conteúdo extraível.</p>' }] });
   }
 
   return { notebookName: title, notebookColor: COLORS[0], sections };
@@ -99,14 +174,14 @@ export function ImportPDF({ onImport, onClose }: ImportPDFProps) {
     setProgress('Carregando leitor de PDF...');
 
     try {
-      setProgress('Extraindo texto...');
-      const { pages, title } = await extractPages(file);
+      setProgress('Extraindo e estruturando conteúdo...');
+      const { pages, title } = await extractStructuredPages(file);
 
-      if (pages.every(p => p.trim().length === 0)) {
+      if (pages.every(p => p.lines.length === 0)) {
         throw new Error('PDF sem texto extraível. Pode ser um PDF escaneado (imagem).');
       }
 
-      setProgress('Estruturando caderno...');
+      setProgress('Montando caderno...');
       const notebook = buildNotebook(pages, title);
 
       setStep('done');
@@ -135,7 +210,7 @@ export function ImportPDF({ onImport, onClose }: ImportPDFProps) {
         {step === 'idle' || step === 'error' ? (
           <>
             <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.5 }}>
-              Importe um PDF e ele será convertido automaticamente em caderno com seções e páginas.
+              Importe um PDF e ele será convertido automaticamente em caderno com seções e páginas formatadas.
             </p>
             <div
               className={`pdf-dropzone${dragOver ? ' drag-over' : ''}`}
@@ -146,7 +221,7 @@ export function ImportPDF({ onImport, onClose }: ImportPDFProps) {
             >
               <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>Clique ou arraste o PDF aqui</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Máximo 20MB · Funciona offline</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Máximo 20MB · Detecta títulos e listas automaticamente</div>
             </div>
             <input ref={fileRef} type="file" accept="application/pdf" style={{ display: 'none' }}
               onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = ''; }} />
@@ -162,7 +237,7 @@ export function ImportPDF({ onImport, onClose }: ImportPDFProps) {
             <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>{progress}</div>
             {isLoading && <div className="progress-bar"><div className="progress-fill slow" /></div>}
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
-              {step === 'processing' && 'Processando localmente, sem necessidade de internet...'}
+              {step === 'processing' && 'Detectando títulos, listas e parágrafos...'}
               {step === 'done' && 'Redirecionando...'}
             </div>
           </div>
