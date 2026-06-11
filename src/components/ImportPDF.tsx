@@ -27,7 +27,7 @@ function loadScript(src: string): Promise<void> {
     const s = document.createElement('script');
     s.src = src;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Falha ao carregar PDF.js'));
+    s.onerror = () => reject(new Error('Falha ao carregar o parser de PDF.'));
     document.head.appendChild(s);
   });
 }
@@ -37,6 +37,10 @@ interface TextItem {
   transform: number[];
   height: number;
   fontName: string;
+}
+
+interface StructuredPage {
+  lines: { text: string; isTitle: boolean; isBullet: boolean; fontSize: number }[];
 }
 
 async function extractStructuredPages(file: File): Promise<{ pages: StructuredPage[]; title: string }> {
@@ -60,18 +64,12 @@ async function extractStructuredPages(file: File): Promise<{ pages: StructuredPa
   return { pages, title };
 }
 
-interface StructuredPage {
-  lines: { text: string; isTitle: boolean; isBullet: boolean; fontSize: number }[];
-}
-
 function parsePageItems(items: TextItem[]): StructuredPage {
   if (!items.length) return { lines: [] };
 
-  // Calcula tamanho médio de fonte para detectar títulos
   const heights = items.map(i => i.height).filter(h => h > 0);
   const avgHeight = heights.reduce((a, b) => a + b, 0) / (heights.length || 1);
 
-  // Agrupa itens em linhas por posição Y
   const lineMap = new Map<number, TextItem[]>();
   items.forEach(item => {
     const y = Math.round(item.transform[5]);
@@ -123,18 +121,14 @@ function pagesToHTML(page: StructuredPage): string {
 }
 
 function buildNotebook(pages: StructuredPage[], title: string): ImportedNotebook {
-  // Detecta seções por títulos grandes entre páginas
   const sections: { name: string; color: string; pages: { title: string; content: string }[] }[] = [];
   let currentSection: typeof sections[0] | null = null;
 
-  // Cada página do PDF vira uma página no caderno
   pages.forEach((pg, idx) => {
-    // Primeiro título grande da página vira nome da página
     const firstTitle = pg.lines.find(l => l.isTitle)?.text || `Página ${idx + 1}`;
     const html = pagesToHTML(pg);
     if (!html.trim()) return;
 
-    // A cada 4 páginas (ou quando há título muito grande) cria nova seção
     const isNewSection = idx % 4 === 0;
     if (isNewSection || !currentSection) {
       const secNum = sections.length + 1;
@@ -165,8 +159,8 @@ export function ImportPDF({ onImport, onClose }: ImportPDFProps) {
   const [dragOver, setDragOver] = useState(false);
 
   const processFile = async (file: File) => {
-    if (file.type !== 'application/pdf') { setError('Selecione um arquivo PDF.'); return; }
-    if (file.size > 20 * 1024 * 1024) { setError('PDF muito grande. Máximo 20MB.'); return; }
+    if (file.type !== 'application/pdf') { setError('Selecione um arquivo PDF válido.'); return; }
+    if (file.size > 20 * 1024 * 1024) { setError('O arquivo excede o limite de 20MB.'); return; }
 
     setFileName(file.name);
     setError('');
@@ -178,18 +172,18 @@ export function ImportPDF({ onImport, onClose }: ImportPDFProps) {
       const { pages, title } = await extractStructuredPages(file);
 
       if (pages.every(p => p.lines.length === 0)) {
-        throw new Error('PDF sem texto extraível. Pode ser um PDF escaneado (imagem).');
+        throw new Error('PDF sem texto extraível. Pode ser um documento digitalizado (imagem).');
       }
 
-      setProgress('Montando caderno...');
+      setProgress('Montando caderno e seções...');
       const notebook = buildNotebook(pages, title);
 
       setStep('done');
-      setProgress('Caderno criado!');
+      setProgress('Caderno importado com sucesso!');
       setTimeout(() => { onImport(notebook); onClose(); }, 700);
     } catch (err: any) {
       setStep('error');
-      setError(err.message || 'Erro ao processar PDF.');
+      setError(err.message || 'Erro inesperado ao processar o PDF.');
     }
   };
 
@@ -204,13 +198,16 @@ export function ImportPDF({ onImport, onClose }: ImportPDFProps) {
 
   return (
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget && !isLoading) onClose(); }}>
-      <div className="modal" style={{ minWidth: 400 }}>
-        <h3>📥 Importar PDF como Caderno</h3>
+      <div className="modal" style={{ maxWidth: '440px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <h3 style={{ margin: 0 }}>Importar PDF como Caderno</h3>
+        </div>
 
         {step === 'idle' || step === 'error' ? (
           <>
-            <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.5 }}>
-              Importe um PDF e ele será convertido automaticamente em caderno com seções e páginas formatadas.
+            <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px', lineHeight: '1.6' }}>
+              Nosso leitor inteligente analisa títulos, listas e capítulos do PDF para estruturar automaticamente um caderno completo com páginas organizadas.
             </p>
             <div
               className={`pdf-dropzone${dragOver ? ' drag-over' : ''}`}
@@ -219,39 +216,116 @@ export function ImportPDF({ onImport, onClose }: ImportPDFProps) {
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
             >
-              <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Clique ou arraste o PDF aqui</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Máximo 20MB · Detecta títulos e listas automaticamente</div>
+              <div style={{ color: 'var(--accent)', marginBottom: '10px' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '4px', color: 'var(--text)' }}>
+                Arraste seu PDF ou clique para buscar
+              </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--muted)' }}>
+                Tamanho máximo 20MB · Estruturação automática
+              </div>
             </div>
             <input ref={fileRef} type="file" accept="application/pdf" style={{ display: 'none' }}
               onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = ''; }} />
-            {error && <div className="import-error">{error}</div>}
+            
+            {error && (
+              <div className="import-error">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span>{error}</span>
+              </div>
+            )}
+            
             <div className="modal-actions">
               <button className="btn-sec" onClick={onClose}>Cancelar</button>
             </div>
           </>
         ) : (
           <div className="import-progress">
-            <div style={{ fontSize: 48, marginBottom: 12 }}>{step === 'done' ? '✅' : '⏳'}</div>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>{fileName}</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>{progress}</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
+              {step === 'done' ? (
+                <div style={{ color: '#10b981' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+              ) : (
+                <div style={{ color: 'var(--accent)' }} className="spinner">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                </div>
+              )}
+            </div>
+            <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text)', marginBottom: '4px' }}>{fileName}</div>
+            <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>{progress}</div>
             {isLoading && <div className="progress-bar"><div className="progress-fill slow" /></div>}
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
-              {step === 'processing' && 'Detectando títulos, listas e parágrafos...'}
-              {step === 'done' && 'Redirecionando...'}
+            <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginTop: '14px' }}>
+              {step === 'processing' && 'Analisando e construindo editor rico...'}
+              {step === 'done' && 'Pronto! Redirecionando...'}
             </div>
           </div>
         )}
       </div>
       <style>{`
-        .pdf-dropzone{border:2px dashed var(--border);border-radius:var(--r);padding:28px 20px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:12px;background:var(--tag)}
-        .pdf-dropzone:hover,.pdf-dropzone.drag-over{border-color:var(--accent);background:rgba(74,124,89,.07)}
-        .import-error{background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.3);color:#c0392b;border-radius:var(--r);padding:8px 12px;font-size:13px;margin-bottom:10px}
-        .import-progress{text-align:center;padding:16px 0}
-        .progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;width:100%}
-        .progress-fill{height:100%;background:var(--accent);border-radius:2px}
-        .progress-fill.slow{animation:progressSlow 2s ease-in-out infinite alternate}
-        @keyframes progressSlow{from{width:20%;margin-left:0}to{width:50%;margin-left:40%}}
+        .pdf-dropzone {
+          border: 2px dashed var(--border);
+          border-radius: var(--r);
+          padding: 32px 20px;
+          text-align: center;
+          cursor: pointer;
+          transition: var(--transition);
+          margin-bottom: 16px;
+          background: rgba(0, 0, 0, 0.01);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+        }
+        .pdf-dropzone:hover, .pdf-dropzone.drag-over {
+          border-color: var(--accent);
+          background: var(--accent-light);
+        }
+        .import-error {
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          color: #ef4444;
+          border-radius: var(--r-sm);
+          padding: 10px 14px;
+          font-size: 13px;
+          margin-bottom: 14px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          line-height: 1.4;
+        }
+        .import-progress {
+          text-align: center;
+          padding: 16px 0;
+        }
+        .progress-bar {
+          height: 5px;
+          background: var(--border);
+          border-radius: 10px;
+          overflow: hidden;
+          width: 80%;
+          margin: 0 auto;
+        }
+        .progress-fill {
+          height: 100%;
+          background: var(--accent);
+          border-radius: 10px;
+        }
+        .progress-fill.slow {
+          animation: progressSlow 2s ease-in-out infinite alternate;
+        }
+        .animate-spin {
+          animation: spin 1.5s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes progressSlow {
+          from { width: 10%; margin-left: 0; }
+          to { width: 45%; margin-left: 55%; }
+        }
       `}</style>
     </div>
   );

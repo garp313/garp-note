@@ -1,4 +1,4 @@
-// File: C:\Users\tevoc\Documents\noteflow-fixed\src\app\page.tsx
+// File: C:\Users\tevoc\.gemini\antigravity\scratch\garp-note\src\app\page.tsx
 import * as entry from '../../../src/app/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

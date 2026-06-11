@@ -24,7 +24,9 @@ export function SectionsBar({ sections, activeSecId, onSelect, onAdd, onContextM
           {sec.name}
         </div>
       ))}
-      <button className="add-sec-btn" onClick={onAdd}>+ Seção</button>
+      <button className="add-sec-btn" onClick={onAdd} title="Nova seção">
+        + Seção
+      </button>
     </div>
   );
 }

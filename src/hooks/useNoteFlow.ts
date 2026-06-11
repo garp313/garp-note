@@ -78,11 +78,17 @@ export function useNoteFlow() {
     const content = stripColorStyles(rawContent);
     const date = new Date().toLocaleDateString('pt-BR');
     setData(prev => {
+      const nb = prev.notebooks.find(n => n.id === prev.activeNb);
+      const sec = nb?.sections.find(s => s.id === prev.activeSec);
+      const pg = sec?.pages.find(p => p.id === prev.activePage);
+      if (pg && pg.title === title && pg.content === content) {
+        return prev;
+      }
       const next = JSON.parse(JSON.stringify(prev)) as AppData;
-      const nb = next.notebooks.find(n => n.id === next.activeNb);
-      const sec = nb?.sections.find(s => s.id === next.activeSec);
-      const pg = sec?.pages.find(p => p.id === next.activePage);
-      if (pg) { pg.title = title; pg.content = content; pg.date = date; }
+      const nextNb = next.notebooks.find(n => n.id === next.activeNb);
+      const nextSec = nextNb?.sections.find(s => s.id === next.activeSec);
+      const nextPg = nextSec?.pages.find(p => p.id === next.activePage);
+      if (nextPg) { nextPg.title = title; nextPg.content = content; nextPg.date = date; }
       saveData(next);
       return next;
     });

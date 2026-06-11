@@ -32,6 +32,7 @@ export default function NoteFlowPage() {
       document.documentElement.classList.add('dark');
     }
   }, []);
+  
   const toggleDark = () => {
     const next = !dark;
     setDark(next);
@@ -52,7 +53,7 @@ export default function NoteFlowPage() {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         flushEditor();
-        showToast('Salvo! ✓');
+        showToast('Alterações salvas! ✓');
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
         e.preventDefault();
@@ -116,16 +117,28 @@ export default function NoteFlowPage() {
       const page = sec?.pages.find(p => p.id === ctx.target?.id);
       if (page) exportPage(page);
     }
-    showToast('Gerando PDF...');
+    showToast('Gerando documento PDF...');
   }, [ctx.target, data, flushEditor, showToast]);
 
-  // Delete
-  const handleDelete = useCallback(() => {
+  // Delete Confirmation Modal (Premium replacement for native confirm)
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ContextTarget | null>(null);
+
+  const openDeleteConfirm = useCallback(() => {
     if (!ctx.target) return;
-    if (!confirm('Excluir este item?')) { closeCtx(); return; }
-    deleteItem(ctx.target);
+    setDeleteTarget(ctx.target);
+    setDeleteModal(true);
     closeCtx();
-  }, [ctx.target, deleteItem, closeCtx]);
+  }, [ctx.target, closeCtx]);
+
+  const confirmDelete = useCallback(() => {
+    if (deleteTarget) {
+      deleteItem(deleteTarget);
+      showToast('Item excluído.');
+    }
+    setDeleteModal(false);
+    setDeleteTarget(null);
+  }, [deleteTarget, deleteItem, showToast]);
 
   // Notebook modal
   const [nbModal, setNbModal] = useState(false);
@@ -135,6 +148,7 @@ export default function NoteFlowPage() {
     if (!nbName.trim()) return;
     createNotebook(nbName.trim(), nbColor);
     setNbModal(false); setNbName('');
+    showToast('Caderno criado!');
   };
 
   // Section modal
@@ -145,6 +159,7 @@ export default function NoteFlowPage() {
     if (!secName.trim()) return;
     createSection(secName.trim(), secColor);
     setSecModal(false); setSecName('');
+    showToast('Seção criada!');
   };
 
   // Math modal
@@ -200,6 +215,18 @@ export default function NoteFlowPage() {
     setQuery(''); setSearchOpen(false);
   };
 
+  // Close search results when clicking outside
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const clickHandler = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', clickHandler);
+    return () => document.removeEventListener('mousedown', clickHandler);
+  }, []);
+
   // Attachment
   const handleAttach = useCallback((file: File) => {
     const reader = new FileReader();
@@ -211,9 +238,10 @@ export default function NoteFlowPage() {
         document.execCommand('insertHTML', false, `<span class="attachment-icon">📄 ${file.name}</span>`);
       }
       flushEditor();
+      showToast('Arquivo anexado!');
     };
     reader.readAsDataURL(file);
-  }, [editorRef, flushEditor]);
+  }, [editorRef, flushEditor, showToast]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -225,8 +253,15 @@ export default function NoteFlowPage() {
     <div className={`app${dark ? ' dark' : ''}`}>
       {/* TOPBAR */}
       <header className="topbar">
-        <span className="logo">📒 Garp Note</span>
-        <div style={{ position: 'relative', flex: 1 }}>
+        <span className="logo">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>
+          Garp Note
+        </span>
+        
+        <div ref={searchContainerRef} className="search-container">
+          <div className="search-icon-wrapper">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
           <input
             className="search-bar"
             type="text"
@@ -237,7 +272,7 @@ export default function NoteFlowPage() {
             autoComplete="off"
           />
           {searchOpen && searchResults.length > 0 && (
-            <div className="search-results" style={{ left: 0, top: '100%' }}>
+            <div className="search-results">
               {searchResults.map(r => {
                 const q = query.toLowerCase();
                 const hiSnippet = r.snippet.replace(new RegExp(q, 'gi'), m => `<mark>${m}</mark>`);
@@ -252,11 +287,29 @@ export default function NoteFlowPage() {
             </div>
           )}
         </div>
-        <button className="top-btn" onClick={() => setImportModal(true)}>📥 Importar PDF</button>
-        <button className="top-btn" onClick={() => setNbModal(true)}>+ Caderno</button>
-        <button className="top-btn" onClick={() => fileInputRef.current?.click()}>📎 Anexar</button>
+
+        <button className="top-btn" onClick={() => setImportModal(true)}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Importar PDF
+        </button>
+        <button className="top-btn accent" onClick={() => setNbModal(true)}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo Caderno
+        </button>
+        <button className="top-btn" onClick={() => fileInputRef.current?.click()} title="Anexar arquivos">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          Anexar
+        </button>
+        
         <input ref={fileInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleAttach(f); e.target.value = ''; }} />
-        <button className="top-btn round" onClick={toggleDark} title="Alternar modo escuro">{dark ? '☀️' : '🌙'}</button>
+        
+        <button className="top-btn round" onClick={toggleDark} title="Alternar modo escuro">
+          {dark ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          )}
+        </button>
       </header>
 
       {/* SIDEBAR */}
@@ -296,7 +349,7 @@ export default function NoteFlowPage() {
               editorRef={editorRef}
               titleRef={titleRef}
               onFlush={flushEditor}
-              onSave={() => { flushEditor(); showToast('Salvo! ✓'); }}
+              onSave={() => { flushEditor(); showToast('Alterações salvas! ✓'); }}
               onAttach={handleAttach}
               onMathOpen={() => setMathModal(true)}
             />
@@ -311,7 +364,7 @@ export default function NoteFlowPage() {
           target={ctx.target}
           onClose={closeCtx}
           onRename={openRename}
-          onDelete={handleDelete}
+          onDelete={openDeleteConfirm}
           onExport={handleExport}
         />
       )}
@@ -319,55 +372,60 @@ export default function NoteFlowPage() {
       {/* MODAL: Novo Caderno */}
       <Modal
         open={nbModal}
-        title="Novo Caderno"
+        title="Criar Novo Caderno"
         onClose={() => setNbModal(false)}
         actions={<>
           <button className="btn-sec" onClick={() => setNbModal(false)}>Cancelar</button>
           <button className="btn-primary" onClick={confirmNb}>Criar</button>
         </>}
       >
+        <label className="modal-label">Nome do Caderno</label>
         <input
           type="text"
-          placeholder="Nome do caderno..."
+          placeholder="Ex: 1º Semestre, Projetos..."
           value={nbName}
           onChange={e => setNbName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && confirmNb()}
           autoFocus
         />
+        <label className="modal-label">Cor de Identificação</label>
         <ColorPicker selected={nbColor} onChange={setNbColor} />
       </Modal>
 
       {/* MODAL: Nova Seção */}
       <Modal
         open={secModal}
-        title="Nova Seção"
+        title="Criar Nova Seção"
         onClose={() => setSecModal(false)}
         actions={<>
           <button className="btn-sec" onClick={() => setSecModal(false)}>Cancelar</button>
           <button className="btn-primary" onClick={confirmSec}>Criar</button>
         </>}
       >
+        <label className="modal-label">Nome da Seção</label>
         <input
           type="text"
-          placeholder="Nome da seção..."
+          placeholder="Ex: Cálculo I, Anotações Gerais..."
           value={secName}
           onChange={e => setSecName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && confirmSec()}
           autoFocus
         />
+        <label className="modal-label">Cor de Identificação</label>
         <ColorPicker selected={secColor} onChange={setSecColor} />
       </Modal>
 
       {/* MODAL: Renomear */}
       <Modal
         open={renameModal}
-        title="Renomear"
+        title="Renomear Item"
         onClose={() => setRenameModal(false)}
         actions={<>
           <button className="btn-sec" onClick={() => setRenameModal(false)}>Cancelar</button>
           <button className="btn-primary" onClick={confirmRename}>Salvar</button>
         </>}
       >
+        <label className="modal-label">Novo Nome</label>
         <input
           type="text"
           value={renameVal}
@@ -380,22 +438,38 @@ export default function NoteFlowPage() {
       {/* MODAL: Fórmula */}
       <Modal
         open={mathModal}
-        title="Inserir Fórmula"
+        title="Inserir Fórmula Matemática"
         onClose={() => setMathModal(false)}
         actions={<>
           <button className="btn-sec" onClick={() => setMathModal(false)}>Cancelar</button>
-          <button className="btn-primary" onClick={insertMath}>Inserir</button>
+          <button className="btn-primary" onClick={insertMath}>Inserir Fórmula</button>
         </>}
       >
+        <label className="modal-label">Expressão (LaTeX / Unicode)</label>
         <textarea
           rows={3}
-          placeholder="Ex: f(x) = \int_a^b x^2 dx"
+          placeholder="Ex: f(x) = \int_a^b x^2 dx ou E = mc²"
           value={mathVal}
           onChange={e => setMathVal(e.target.value)}
           autoFocus
         />
-        <span className="modal-label">Prévia:</span>
-        <div className="math-preview">{mathVal || '...'}</div>
+        <span className="modal-label">Pré-visualização:</span>
+        <div className="math-preview">{mathVal || 'Escreva a fórmula acima...'}</div>
+      </Modal>
+
+      {/* MODAL: Confirmação de Exclusão (Premium) */}
+      <Modal
+        open={deleteModal}
+        title="Excluir Item?"
+        onClose={() => setDeleteModal(false)}
+        actions={<>
+          <button className="btn-sec" onClick={() => setDeleteModal(false)}>Cancelar</button>
+          <button className="btn-primary" style={{ background: '#ef4444', borderColor: '#ef4444', boxShadow: 'none' }} onClick={confirmDelete}>Excluir</button>
+        </>}
+      >
+        <p style={{ fontSize: '13.5px', color: 'var(--muted)', lineHeight: '1.5' }}>
+          Esta ação é irreversível. O item selecionado e todo o seu conteúdo associado serão permanentemente apagados.
+        </p>
       </Modal>
 
       {/* MODAL: Importar PDF */}
@@ -407,7 +481,12 @@ export default function NoteFlowPage() {
       )}
 
       {/* TOAST */}
-      {toast.msg && <div key={toast.k} className="toast">{toast.msg}</div>}
+      {toast.msg && (
+        <div key={toast.k} className="toast">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+          <span>{toast.msg}</span>
+        </div>
+      )}
     </div>
   );
 }
