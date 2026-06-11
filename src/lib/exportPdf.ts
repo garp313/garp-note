@@ -97,7 +97,7 @@ function buildHtml(title: string, pages: { title: string; content: string; date:
 <body>
   <div class="export-header">
     <h1>${title}</h1>
-    <div class="meta">Exportado em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} • Garp Note</div>
+    <div class="meta">Exportado em ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })} • Cadernin do Estevão</div>
   </div>
   ${pagesHtml}
 </body>

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Garp Note',
+  title: 'Cadernin do Estevão',
   description: 'Aplicativo de anotações para universitários',
 };
 

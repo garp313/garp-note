@@ -255,7 +255,7 @@ export default function NoteFlowPage() {
       <header className="topbar">
         <span className="logo">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>
-          Garp Note
+          Cadernin do Estevão
         </span>
         
         <div ref={searchContainerRef} className="search-container">
