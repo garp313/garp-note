@@ -250,7 +250,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
   }, [onAttach]);
 
   // Paste handler: intercepts CTRL+V before the browser, reads image from
-  // clipboard and inserts it as a base64 <img> tag in the editor.
+  // clipboard and inserts it as a resizable and draggable wrapper in the editor.
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items);
     const imageItem = items.find(item => item.type.startsWith('image/'));
@@ -288,11 +288,35 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
       const src = ev.target?.result as string;
       if (!src) return;
       editorRef.current?.focus();
-      document.execCommand(
-        'insertHTML',
-        false,
-        `<img src="${src}" alt="imagem colada" style="max-width:100%;border-radius:6px;margin:8px 0;" />`
-      );
+      
+      const editor = editorRef.current;
+      let top = 20;
+      if (editor) {
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          const editorRect = editor.getBoundingClientRect();
+          if (rect.top !== 0 && rect.left !== 0) {
+            top = rect.top - editorRect.top + editor.scrollTop;
+          } else {
+            top = editor.scrollTop + 50;
+          }
+        } else {
+          top = editor.scrollTop + 50;
+        }
+      }
+
+      const wrapperHTML = `
+        <div class="resizable-image-wrapper" contenteditable="false" style="position: absolute; left: 10px; top: ${top}px; width: 300px; cursor: move; user-select: none; display: inline-block;">
+          <img src="${src}" alt="imagem colada" style="width: 100%; height: auto; display: block; border-radius: 4px; pointer-events: none;" />
+          <div class="resize-handle top-left"></div>
+          <div class="resize-handle top-right"></div>
+          <div class="resize-handle bottom-left"></div>
+          <div class="resize-handle bottom-right"></div>
+        </div>
+      `;
+      document.execCommand('insertHTML', false, wrapperHTML);
       handleInput();
     };
     reader.readAsDataURL(file);
@@ -346,6 +370,140 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
 
     return () => observer.disconnect();
   }, [editorRef]);
+
+  // Draggable and Resizable images handler (OneNote style)
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    let activeElement: HTMLElement | null = null;
+    let isDragging = false;
+    let isResizing = false;
+    let resizeDir = '';
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+    let startLeft = 0;
+    let startTop = 0;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // 1. Check if we clicked a resize handle
+      if (target.classList.contains('resize-handle')) {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizing = true;
+        activeElement = target.closest('.resizable-image-wrapper');
+        if (!activeElement) return;
+        
+        if (target.classList.contains('bottom-right')) resizeDir = 'br';
+        else if (target.classList.contains('bottom-left')) resizeDir = 'bl';
+        else if (target.classList.contains('top-right')) resizeDir = 'tr';
+        else if (target.classList.contains('top-left')) resizeDir = 'tl';
+        
+        startX = e.clientX;
+        startY = e.clientY;
+        startWidth = activeElement.offsetWidth;
+        startHeight = activeElement.offsetHeight;
+        startLeft = activeElement.offsetLeft;
+        startTop = activeElement.offsetTop;
+        
+        document.addEventListener('pointermove', handlePointerMove);
+        document.addEventListener('pointerup', handlePointerUp);
+        
+        editor.querySelectorAll('.resizable-image-wrapper').forEach(el => el.classList.remove('selected'));
+        activeElement.classList.add('selected');
+        return;
+      }
+      
+      // 2. Check if we clicked the image wrapper itself
+      const wrapper = target.closest('.resizable-image-wrapper') as HTMLElement;
+      if (wrapper) {
+        e.preventDefault();
+        e.stopPropagation();
+        isDragging = true;
+        activeElement = wrapper;
+        startX = e.clientX;
+        startY = e.clientY;
+        startLeft = activeElement.offsetLeft;
+        startTop = activeElement.offsetTop;
+        
+        document.addEventListener('pointermove', handlePointerMove);
+        document.addEventListener('pointerup', handlePointerUp);
+        
+        editor.querySelectorAll('.resizable-image-wrapper').forEach(el => el.classList.remove('selected'));
+        activeElement.classList.add('selected');
+        return;
+      }
+      
+      // Clicked elsewhere - remove selection outline
+      editor.querySelectorAll('.resizable-image-wrapper').forEach(el => el.classList.remove('selected'));
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!activeElement) return;
+      
+      if (isDragging) {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        activeElement.style.left = `${startLeft + dx}px`;
+        activeElement.style.top = `${startTop + dy}px`;
+      } else if (isResizing) {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        
+        let newWidth = startWidth;
+        let newHeight = startHeight;
+        let newLeft = startLeft;
+        let newTop = startTop;
+        
+        if (resizeDir === 'br') {
+          newWidth = startWidth + dx;
+          newHeight = startHeight + dy;
+        } else if (resizeDir === 'bl') {
+          newWidth = startWidth - dx;
+          newHeight = startHeight + dy;
+          newLeft = startLeft + dx;
+        } else if (resizeDir === 'tr') {
+          newWidth = startWidth + dx;
+          newHeight = startHeight - dy;
+          newTop = startTop + dy;
+        } else if (resizeDir === 'tl') {
+          newWidth = startWidth - dx;
+          newHeight = startHeight - dy;
+          newLeft = startLeft + dx;
+          newTop = startTop + dy;
+        }
+        
+        if (newWidth > 50) {
+          activeElement.style.width = `${newWidth}px`;
+          activeElement.style.left = `${newLeft}px`;
+        }
+        if (newHeight > 50) {
+          activeElement.style.height = `${newHeight}px`;
+          activeElement.style.top = `${newTop}px`;
+        }
+      }
+    };
+
+    const handlePointerUp = () => {
+      isDragging = false;
+      isResizing = false;
+      activeElement = null;
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+      handleInput(); // Auto-save updated position/size!
+    };
+
+    editor.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      editor.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [editorRef, handleInput]);
 
   const fmt = useCallback((cmd: string, value?: string) => {
     editorRef.current?.focus();

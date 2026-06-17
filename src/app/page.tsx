@@ -233,7 +233,33 @@ export default function NoteFlowPage() {
     reader.onload = e => {
       editorRef.current?.focus();
       if (file.type.startsWith('image/')) {
-        document.execCommand('insertHTML', false, `<img src="${e.target?.result}" alt="${file.name}">`);
+        const editor = editorRef.current;
+        let top = 20;
+        if (editor) {
+          const selection = window.getSelection();
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const editorRect = editor.getBoundingClientRect();
+            if (rect.top !== 0 && rect.left !== 0) {
+              top = rect.top - editorRect.top + editor.scrollTop;
+            } else {
+              top = editor.scrollTop + 50;
+            }
+          } else {
+            top = editor.scrollTop + 50;
+          }
+        }
+        const wrapperHTML = `
+          <div class="resizable-image-wrapper" contenteditable="false" style="position: absolute; left: 10px; top: ${top}px; width: 300px; cursor: move; user-select: none; display: inline-block;">
+            <img src="${e.target?.result}" alt="${file.name}" style="width: 100%; height: auto; display: block; border-radius: 4px; pointer-events: none;" />
+            <div class="resize-handle top-left"></div>
+            <div class="resize-handle top-right"></div>
+            <div class="resize-handle bottom-left"></div>
+            <div class="resize-handle bottom-right"></div>
+          </div>
+        `;
+        document.execCommand('insertHTML', false, wrapperHTML);
       } else {
         document.execCommand('insertHTML', false, `<span class="attachment-icon">📄 ${file.name}</span>`);
       }

@@ -824,6 +824,54 @@ body {
   font-size: 16px;
   color: var(--text);
   caret-color: var(--accent);
+  position: relative;
+  min-height: 500px;
+}
+
+/* Resizable and Draggable Images */
+.resizable-image-wrapper {
+  border: 1.5px solid transparent;
+  box-sizing: border-box;
+  z-index: 10;
+  transition: border-color 0.15s;
+}
+.resizable-image-wrapper.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.2);
+}
+.resize-handle {
+  width: 9px;
+  height: 9px;
+  background: var(--accent);
+  border: 1px solid var(--surface);
+  position: absolute;
+  border-radius: 50%;
+  display: none;
+  z-index: 11;
+}
+.resizable-image-wrapper:hover .resize-handle,
+.resizable-image-wrapper.selected .resize-handle {
+  display: block;
+}
+.resize-handle.top-left {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+.resize-handle.top-right {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+.resize-handle.bottom-left {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+.resize-handle.bottom-right {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
 }
 
 .editor-content:empty::before {
