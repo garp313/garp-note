@@ -885,10 +885,83 @@ body {
   user-select: none;
   opacity: 0.15;
   transition: opacity 0.15s;
+  height: 18px;
+  background: var(--panel);
+  border-radius: 4px 4px 0 0;
+  cursor: move;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border);
 }
 .resizable-text-wrapper:hover .text-drag-handle,
 .resizable-text-wrapper.selected .text-drag-handle {
   opacity: 1;
+}
+.drag-dots {
+  width: 24px;
+  height: 4px;
+  border-top: 1px double var(--muted);
+  border-bottom: 1px solid var(--muted);
+  opacity: 0.6;
+  margin-left: auto;
+  margin-right: auto;
+  transform: translateX(10px);
+}
+.text-content {
+  padding: 8px 12px;
+  outline: none;
+  min-height: 40px;
+  word-break: break-word;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.resizable-text-wrapper .wrapper-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  width: 14px;
+  border-radius: 2px;
+  transition: background 0.15s, color 0.15s;
+}
+.resizable-text-wrapper .wrapper-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+.resizable-image-wrapper .wrapper-delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  border: none;
+  cursor: pointer;
+  color: #ffffff;
+  padding: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  width: 20px;
+  border-radius: 4px;
+  z-index: 12;
+  transition: background 0.15s;
+}
+.resizable-image-wrapper:hover .wrapper-delete-btn,
+.resizable-image-wrapper.selected .wrapper-delete-btn {
+  display: flex;
+}
+.resizable-image-wrapper .wrapper-delete-btn:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
 }
 
 .editor-content:empty::before {

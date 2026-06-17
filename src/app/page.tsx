@@ -261,6 +261,9 @@ export default function NoteFlowPage() {
         const wrapperHTML = `
           <div class="resizable-image-wrapper" contenteditable="false" style="position: absolute; left: 10px; top: ${top}px; width: 300px; cursor: move; user-select: none; display: inline-block;">
             <img src="${e.target?.result}" alt="${file.name}" style="width: 100%; height: auto; display: block; border-radius: 4px; pointer-events: none;" />
+            <button class="wrapper-delete-btn" title="Apagar imagem">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
             <div class="resize-handle top-left"></div>
             <div class="resize-handle top-right"></div>
             <div class="resize-handle bottom-left"></div>
@@ -329,6 +332,10 @@ export default function NoteFlowPage() {
         <button className="top-btn accent" onClick={() => setNbModal(true)}>
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Novo Caderno
+        </button>
+        <button className="top-btn" onClick={() => (editorRef.current as any)?.insertTextBox?.()} title="Inserir caixa de texto flutuante">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 17V7h6M9 7h6M12 7v10"/></svg>
+          Texto Flutuante
         </button>
         <button className="top-btn" onClick={() => fileInputRef.current?.click()} title="Anexar arquivos">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>

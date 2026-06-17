@@ -148,15 +148,18 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     }
   }, [editorRef]);
 
-  // Expose restoreSelection to editorRef for parent components
+  // Expose restoreSelection and insertTextBox to editorRef for parent components
   useEffect(() => {
     if (editorRef.current) {
       (editorRef.current as any).restoreSelection = () => {
         restoreSelection();
         focusSelectionTarget();
       };
+      (editorRef.current as any).insertTextBox = () => {
+        insertTextBox();
+      };
     }
-  }, [editorRef, restoreSelection, focusSelectionTarget]);
+  }, [editorRef, restoreSelection, focusSelectionTarget, insertTextBox]);
 
   // Close popups when clicking outside
   useEffect(() => {
@@ -280,10 +283,13 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
 
     const wrapperHTML = `
       <div class="resizable-text-wrapper" contenteditable="false" style="position: absolute; left: 50px; top: ${top}px; width: 250px; min-height: 60px; border: 1.5px solid transparent; box-sizing: border-box; z-index: 10; display: inline-block;">
-        <div class="text-drag-handle" style="height: 14px; background: var(--panel); border-radius: 4px 4px 0 0; cursor: move; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border);">
-          <div style="width: 24px; height: 4px; border-top: 1px double var(--muted); border-bottom: 1px solid var(--muted); opacity: 0.6;"></div>
+        <div class="text-drag-handle">
+          <div class="drag-dots"></div>
+          <button class="wrapper-delete-btn" title="Apagar caixa de texto">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
-        <div class="text-content" contenteditable="true" style="padding: 8px 12px; outline: none; min-height: 40px; word-break: break-word; color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5;">
+        <div class="text-content" contenteditable="true">
           Nova caixa de texto...
         </div>
         <div class="resize-handle top-left"></div>
@@ -377,6 +383,9 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
       const wrapperHTML = `
         <div class="resizable-image-wrapper" contenteditable="false" style="position: absolute; left: 10px; top: ${top}px; width: 300px; cursor: move; user-select: none; display: inline-block;">
           <img src="${src}" alt="imagem colada" style="width: 100%; height: auto; display: block; border-radius: 4px; pointer-events: none;" />
+          <button class="wrapper-delete-btn" title="Apagar imagem">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
           <div class="resize-handle top-left"></div>
           <div class="resize-handle top-right"></div>
           <div class="resize-handle bottom-left"></div>
@@ -465,6 +474,19 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
 
     const handlePointerDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
+      
+      // 0. Check if we clicked a wrapper delete button
+      const deleteBtn = target.closest('.wrapper-delete-btn');
+      if (deleteBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const wrapper = deleteBtn.closest('.resizable-image-wrapper, .resizable-text-wrapper');
+        if (wrapper) {
+          wrapper.remove();
+          handleInput();
+        }
+        return;
+      }
       
       // 1. Check if we clicked a resize handle
       if (target.classList.contains('resize-handle')) {
@@ -601,10 +623,13 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
 
         const wrapperHTML = `
           <div class="resizable-text-wrapper" contenteditable="false" style="position: absolute; left: ${left}px; top: ${top}px; width: 250px; min-height: 60px; border: 1.5px solid transparent; box-sizing: border-box; z-index: 10; display: inline-block;">
-            <div class="text-drag-handle" style="height: 14px; background: var(--panel); border-radius: 4px 4px 0 0; cursor: move; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border);">
-              <div style="width: 24px; height: 4px; border-top: 1px double var(--muted); border-bottom: 1px solid var(--muted); opacity: 0.6;"></div>
+            <div class="text-drag-handle">
+              <div class="drag-dots"></div>
+              <button class="wrapper-delete-btn" title="Apagar caixa de texto">
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
             </div>
-            <div class="text-content" contenteditable="true" style="padding: 8px 12px; outline: none; min-height: 40px; word-break: break-word; color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5;">
+            <div class="text-content" contenteditable="true">
               Texto...
             </div>
             <div class="resize-handle top-left"></div>
