@@ -37,31 +37,33 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     onFlush();
   }, [onFlush]);
 
-  // Flush when page changes
+  // Update the DOM when the active page changes.
+  // NOTE: We do NOT call onFlush() here. The navigation functions (selectPage,
+  // selectSection, selectNotebook) already flush the old page atomically in a
+  // single setData call BEFORE changing activePage. Calling onFlush() here would
+  // re-save the old DOM content (old title) into the already-changed activePage,
+  // which is exactly the title-duplication bug we are fixing.
   useEffect(() => {
     if (!page) {
-      if (prevPageId && debounceTimerRef.current) {
+      // Just cancel any pending debounce; navigation already flushed.
+      if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
-        onFlush();
       }
       setPrevPageId(undefined);
       return;
     }
 
     if (page.id !== prevPageId) {
-      // If we are transitioning from another page, flush the old content first
-      if (prevPageId) {
-        if (debounceTimerRef.current) {
-          clearTimeout(debounceTimerRef.current);
-        }
-        onFlush();
+      // Cancel any pending debounce — the navigation already saved the old page.
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
 
       setPrevPageId(page.id);
       if (titleRef.current) titleRef.current.value = page.title ?? '';
       if (editorRef.current) editorRef.current.innerHTML = page.content ?? '';
     }
-  }, [page, prevPageId, onFlush, titleRef, editorRef]);
+  }, [page, prevPageId, titleRef, editorRef]);
 
   // Clean up on unmount and flush any pending saves
   useEffect(() => {
