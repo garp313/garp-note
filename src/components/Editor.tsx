@@ -20,13 +20,27 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
+  const [fontSizeOpen, setFontSizeOpen] = useState(false);
+  const fontSizeRef = useRef<HTMLDivElement>(null);
+  const [highlighterOpen, setHighlighterOpen] = useState(false);
+  const highlighterRef = useRef<HTMLDivElement>(null);
   const lastRangeRef = useRef<Range | null>(null);
 
   const COLOR_PALETTE = [
     '#0f172a','#ef4444','#f97316','#eab308','#22c55e',
     '#3b82f6','#6366f1','#a855f7','#ec4899','#14b8a6',
-    '#64748b','#dc2626','#ea580c','#ca8a04','#16a34a',
+    '#ffffff','#dc2626','#ea580c','#ca8a04','#16a34a',
     '#2563eb','#4f46e5','#9333ea','#db2777','#0d9488',
+  ];
+
+  const HIGHLIGHT_PALETTE = [
+    'transparent',
+    '#fef08a', // Amarelo
+    '#bbf7d0', // Verde
+    '#bfdbfe', // Azul
+    '#fbcfe8', // Rosa
+    '#fed7aa', // Laranja
+    '#e9d5ff', // Roxo
   ];
 
   // Debounced auto-save
@@ -118,11 +132,17 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     }
   }, []);
 
-  // Close color picker when clicking outside
+  // Close popups when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
         setColorPickerOpen(false);
+      }
+      if (fontSizeRef.current && !fontSizeRef.current.contains(e.target as Node)) {
+        setFontSizeOpen(false);
+      }
+      if (highlighterRef.current && !highlighterRef.current.contains(e.target as Node)) {
+        setHighlighterOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -138,25 +158,76 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     setColorPickerOpen(false);
   }, [editorRef, handleInput, restoreSelection]);
 
-  // Apply font size (%) to selected text via span wrapping
+  // Apply font size (%) to selected text using a robust execCommand + node replacement strategy
   const applyFontSize = useCallback((percent: string) => {
     restoreSelection();
     editorRef.current?.focus();
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
-    const range = selection.getRangeAt(0);
-    const span = document.createElement('span');
-    span.style.fontSize = percent;
-    try {
-      range.surroundContents(span);
-    } catch {
-      // surroundContents fails for multi-element selections
-      const fragment = range.extractContents();
-      span.appendChild(fragment);
-      range.insertNode(span);
+    document.execCommand('fontSize', false, '7');
+    if (editorRef.current) {
+      const fonts = editorRef.current.querySelectorAll('font[size="7"]');
+      fonts.forEach(font => {
+        const span = document.createElement('span');
+        span.style.fontSize = percent;
+        while (font.firstChild) {
+          span.appendChild(font.firstChild);
+        }
+        font.parentNode?.replaceChild(span, font);
+      });
     }
     handleInput();
   }, [editorRef, handleInput, restoreSelection]);
+
+  // Apply background (highlight) color to selected text
+  const applyHighlight = useCallback((color: string) => {
+    restoreSelection();
+    editorRef.current?.focus();
+    document.execCommand('backColor', false, color);
+    handleInput();
+    setHighlighterOpen(false);
+  }, [editorRef, handleInput, restoreSelection]);
+
+  // Insert a custom 3x3 table (OneNote style)
+  const insertTable = useCallback(() => {
+    editorRef.current?.focus();
+    const tableHTML = `
+      <table style="width:100%; border-collapse:collapse; margin:16px 0;">
+        <thead>
+          <tr style="background:var(--panel);">
+            <th style="border:1px solid var(--border); padding:8px 12px; text-align:left; font-weight:600;">Cabeçalho 1</th>
+            <th style="border:1px solid var(--border); padding:8px 12px; text-align:left; font-weight:600;">Cabeçalho 2</th>
+            <th style="border:1px solid var(--border); padding:8px 12px; text-align:left; font-weight:600;">Cabeçalho 3</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border:1px solid var(--border); padding:8px 12px;">Dado 1</td>
+            <td style="border:1px solid var(--border); padding:8px 12px;">Dado 2</td>
+            <td style="border:1px solid var(--border); padding:8px 12px;">Dado 3</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid var(--border); padding:8px 12px;">Dado 4</td>
+            <td style="border:1px solid var(--border); padding:8px 12px;">Dado 5</td>
+            <td style="border:1px solid var(--border); padding:8px 12px;">Dado 6</td>
+          </tr>
+        </tbody>
+      </table><br>
+    `;
+    document.execCommand('insertHTML', false, tableHTML);
+    handleInput();
+  }, [editorRef, handleInput]);
+
+  // Insert custom OneNote-like tags (⭐️ Important, ❓ Question)
+  const insertTag = useCallback((type: 'star' | 'question') => {
+    editorRef.current?.focus();
+    let tagHTML = '';
+    if (type === 'star') {
+      tagHTML = '<span style="background: rgba(234, 179, 8, 0.1); border-left: 3px solid #eab308; padding: 2px 6px; margin: 2px 0; border-radius: 2px; font-weight: 500; font-size: 13px; color: var(--text);">⭐️ Importante: </span>&nbsp;';
+    } else if (type === 'question') {
+      tagHTML = '<span style="background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; padding: 2px 6px; margin: 2px 0; border-radius: 2px; font-weight: 500; font-size: 13px; color: var(--text);">❓ Dúvida: </span>&nbsp;';
+    }
+    document.execCommand('insertHTML', false, tagHTML);
+    handleInput();
+  }, [editorRef, handleInput]);
 
   // Drag & Drop handlers
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -232,13 +303,27 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     const editor = editorRef.current;
     if (!editor) return;
 
-    // Only strip background colors injected by the browser (not user-set text colors).
-    // User-set text colors are applied intentionally via the color picker.
+    const ALLOWED_BACKGROUNDS = [
+      'rgb(254, 240, 138)', '#fef08a',
+      'rgb(187, 247, 208)', '#bbf7d0',
+      'rgb(191, 219, 254)', '#bfdbfe',
+      'rgb(251, 207, 232)', '#fbcfe8',
+      'rgb(253, 215, 170)', '#fed7aa',
+      'rgb(233, 213, 255)', '#e9d5ff'
+    ];
+
+    // Only strip background colors injected by the browser (not user-set text colors or highlight colors).
     const stripInlineColors = (node: Node) => {
       if (node.nodeType !== Node.ELEMENT_NODE) return;
       const el = node as HTMLElement;
-      el.style.removeProperty('background-color');
-      el.style.removeProperty('background');
+      
+      const bg = el.style.backgroundColor?.toLowerCase();
+      const hasAllowedBg = ALLOWED_BACKGROUNDS.some(allowed => bg.includes(allowed));
+      
+      if (bg && !hasAllowedBg) {
+        el.style.removeProperty('background-color');
+        el.style.removeProperty('background');
+      }
       if (el.getAttribute('style') === '') el.removeAttribute('style');
       el.childNodes.forEach(stripInlineColors);
     };
@@ -369,7 +454,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
                       key={c}
                       className="color-swatch"
                       style={{ background: c }}
-                      title={c}
+                      title={c === '#ffffff' ? 'Branco' : c}
                       onClick={() => applyColor(c)}
                       onMouseDown={(e) => e.preventDefault()}
                     />
@@ -378,6 +463,54 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
               </div>
             )}
           </div>
+
+          {/* Highlighter picker */}
+          <div className="color-picker-wrapper" ref={highlighterRef}>
+            <button
+              className="fmt-btn color-btn"
+              title="Cor de realce do texto"
+              onClick={() => setHighlighterOpen(o => !o)}
+              onMouseDown={(e) => e.preventDefault()}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m9 11-6 6v3h3l6-6"/>
+                <path d="m18 12 3 3-9 9M19 9l3-3-3-3-3 3"/>
+              </svg>
+            </button>
+            {highlighterOpen && (
+              <div className="color-picker-popup">
+                <div className="color-picker-grid" style={{ gridTemplateColumns: 'repeat(4, 20px)' }}>
+                  {HIGHLIGHT_PALETTE.map(c => (
+                    <button
+                      key={c}
+                      className="color-swatch"
+                      style={{ 
+                        background: c === 'transparent' ? 'none' : c,
+                        position: 'relative',
+                        border: c === 'transparent' ? '1px dashed var(--muted)' : '1px solid var(--border)' 
+                      }}
+                      title={c === 'transparent' ? 'Sem realce' : c}
+                      onClick={() => applyHighlight(c)}
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      {c === 'transparent' && (
+                        <span style={{ fontSize: '10px', color: 'var(--muted)', display: 'block', textAlign: 'center', lineHeight: '18px' }}>❌</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Clear formatting */}
+          <button className="fmt-btn" onClick={() => fmt('removeFormat')} title="Limpar Formatação" onMouseDown={(e) => e.preventDefault()}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7V4h16v3M9 20h6M12 4v16M5 20h14"/>
+              <line x1="4" y1="18" x2="20" y2="6"/>
+            </svg>
+          </button>
         </div>
 
         <span className="fmt-sep" />
@@ -395,22 +528,43 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
             <option value="p">Texto Normal</option>
           </select>
 
-          <select
-            className="fmt-select"
-            onChange={e => { applyFontSize(e.target.value); e.target.value = ''; }}
-            defaultValue=""
-            title="Tamanho do texto"
-          >
-            <option value="" disabled>Tamanho %</option>
-            <option value="75%">75%</option>
-            <option value="90%">90%</option>
-            <option value="100%">100%</option>
-            <option value="110%">110%</option>
-            <option value="125%">125%</option>
-            <option value="150%">150%</option>
-            <option value="175%">175%</option>
-            <option value="200%">200%</option>
-          </select>
+          {/* Custom Font Size Picker */}
+          <div className="color-picker-wrapper" ref={fontSizeRef}>
+            <button
+              className="fmt-btn"
+              title="Tamanho do texto"
+              onClick={() => setFontSizeOpen(o => !o)}
+              onMouseDown={(e) => e.preventDefault()}
+              style={{ width: 'auto', padding: '0 8px', gap: '4px', display: 'flex', alignItems: 'center', height: '28px', fontSize: '12px' }}
+            >
+              <span>Tamanho</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            {fontSizeOpen && (
+              <div className="color-picker-popup" style={{ minWidth: '80px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {['75%', '90%', '100%', '110%', '125%', '150%', '175%', '200%'].map(size => (
+                    <button
+                      key={size}
+                      className="font-size-option"
+                      onClick={() => { applyFontSize(size); setFontSizeOpen(false); }}
+                      onMouseDown={(e) => e.preventDefault()}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Subscript / Superscript */}
+          <button className="fmt-btn" onClick={() => fmt('subscript')} title="Subscrito" onMouseDown={(e) => e.preventDefault()}>
+            <span style={{ fontSize: '10px', fontWeight: 'bold' }}>X<sub>2</sub></span>
+          </button>
+          <button className="fmt-btn" onClick={() => fmt('superscript')} title="Sobrescrito" onMouseDown={(e) => e.preventDefault()}>
+            <span style={{ fontSize: '10px', fontWeight: 'bold' }}>X<sup>2</sup></span>
+          </button>
         </div>
 
         <span className="fmt-sep" />
@@ -425,6 +579,14 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
           <button className="fmt-btn" onClick={insertCheckbox} title="Caixa de Seleção" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="m9 12 2 2 4-4"/></svg>
           </button>
+          
+          {/* Table */}
+          <button className="fmt-btn" onClick={insertTable} title="Inserir Tabela" onMouseDown={(e) => e.preventDefault()}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3h18v18H3z"/>
+              <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+            </svg>
+          </button>
         </div>
 
         <span className="fmt-sep" />
@@ -438,6 +600,19 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
           </button>
           <button className="fmt-btn" onClick={onMathOpen} title="Fórmula Matemática" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 4H6L12 12L6 20H18"/></svg>
+          </button>
+
+          {/* OneNote style Tags */}
+          <button className="fmt-btn" onClick={() => insertTag('star')} title="Marcar como Importante" onMouseDown={(e) => e.preventDefault()}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </button>
+          <button className="fmt-btn" onClick={() => insertTag('question')} title="Marcar como Dúvida" onMouseDown={(e) => e.preventDefault()}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
           </button>
         </div>
 

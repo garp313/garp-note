@@ -717,7 +717,7 @@ body {
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 2px solid transparent;
+  border: 1px solid var(--border);
   cursor: pointer;
   transition: transform 0.12s ease, border-color 0.12s ease;
   outline: none;
@@ -726,6 +726,41 @@ body {
 .color-swatch:hover {
   transform: scale(1.2);
   border-color: var(--text);
+}
+
+.font-size-option {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+  width: 100%;
+}
+.font-size-option:hover {
+  background: var(--panel);
+}
+
+/* Editor table styling */
+.editor-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.editor-content th,
+.editor-content td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  min-width: 50px;
+}
+.editor-content th {
+  background-color: var(--panel);
+  font-weight: 600;
 }
 
 .export-group {
