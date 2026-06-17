@@ -54,7 +54,7 @@ export function useNoteFlow() {
 
   // Remove estilos inline de cor do HTML antes de salvar
   // Evita que cores hardcoded do browser sobrescrevam o modo escuro
-  const stripColorStyles = (html: string): string => {
+  const stripColorStyles = useCallback((html: string): string => {
     if (typeof document === 'undefined') return html;
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
@@ -69,56 +69,117 @@ export function useNoteFlow() {
     };
     Array.from(tmp.children).forEach(walk);
     return tmp.innerHTML;
-  };
+  }, []);
 
-  // Auto-save current editor content into state
-  const flushEditor = useCallback(() => {
+  // Auto-save current editor content into state.
+  // Accepts an optional override for which page/section/notebook to save into,
+  // so navigation and flush can be done atomically in a single setData call.
+  const flushEditor = useCallback((overridePageId?: string, overrideSecId?: string, overrideNbId?: string) => {
     const title = titleRef.current?.value ?? '';
     const rawContent = editorRef.current?.innerHTML ?? '';
     const content = stripColorStyles(rawContent);
     const date = new Date().toLocaleDateString('pt-BR');
     setData(prev => {
-      const nb = prev.notebooks.find(n => n.id === prev.activeNb);
-      const sec = nb?.sections.find(s => s.id === prev.activeSec);
-      const pg = sec?.pages.find(p => p.id === prev.activePage);
+      const targetNbId = overrideNbId ?? prev.activeNb;
+      const targetSecId = overrideSecId ?? prev.activeSec;
+      const targetPageId = overridePageId ?? prev.activePage;
+      const nb = prev.notebooks.find(n => n.id === targetNbId);
+      const sec = nb?.sections.find(s => s.id === targetSecId);
+      const pg = sec?.pages.find(p => p.id === targetPageId);
       if (pg && pg.title === title && pg.content === content) {
         return prev;
       }
       const next = JSON.parse(JSON.stringify(prev)) as AppData;
-      const nextNb = next.notebooks.find(n => n.id === next.activeNb);
-      const nextSec = nextNb?.sections.find(s => s.id === next.activeSec);
-      const nextPg = nextSec?.pages.find(p => p.id === next.activePage);
+      const nextNb = next.notebooks.find(n => n.id === targetNbId);
+      const nextSec = nextNb?.sections.find(s => s.id === targetSecId);
+      const nextPg = nextSec?.pages.find(p => p.id === targetPageId);
       if (nextPg) { nextPg.title = title; nextPg.content = content; nextPg.date = date; }
       saveData(next);
       return next;
     });
   }, []);
 
-  // Navigation
+  // Navigation: each function flushes the current page atomically THEN navigates.
+  // We use a single setData call to avoid race conditions where the title of the
+  // old page gets saved into the new page (because activePage was already changed).
   const selectNotebook = useCallback((nbId: string) => {
-    flushEditor();
-    updateData(prev => {
-      const nb = prev.notebooks.find(n => n.id === nbId);
+    setData(prev => {
+      // 1. Capture current editor values (DOM reads must happen outside setData)
+      const title = titleRef.current?.value ?? '';
+      const rawContent = editorRef.current?.innerHTML ?? '';
+      const content = stripColorStyles(rawContent);
+      const date = new Date().toLocaleDateString('pt-BR');
+
+      const next = JSON.parse(JSON.stringify(prev)) as AppData;
+
+      // 2. Flush old page
+      const oldNb = next.notebooks.find(n => n.id === next.activeNb);
+      const oldSec = oldNb?.sections.find(s => s.id === next.activeSec);
+      const oldPg = oldSec?.pages.find(p => p.id === next.activePage);
+      if (oldPg) { oldPg.title = title; oldPg.content = content; oldPg.date = date; }
+
+      // 3. Navigate
+      const nb = next.notebooks.find(n => n.id === nbId);
       const firstSec = nb?.sections[0];
       const firstPage = firstSec?.pages[0];
-      return { ...prev, activeNb: nbId, activeSec: firstSec?.id ?? null, activePage: firstPage?.id ?? null };
+      next.activeNb = nbId;
+      next.activeSec = firstSec?.id ?? null;
+      next.activePage = firstPage?.id ?? null;
+
+      saveData(next);
+      return next;
     });
-  }, [flushEditor, updateData]);
+  }, [stripColorStyles]);
 
   const selectSection = useCallback((secId: string) => {
-    flushEditor();
-    updateData(prev => {
-      const nb = prev.notebooks.find(n => n.id === prev.activeNb);
+    setData(prev => {
+      const title = titleRef.current?.value ?? '';
+      const rawContent = editorRef.current?.innerHTML ?? '';
+      const content = stripColorStyles(rawContent);
+      const date = new Date().toLocaleDateString('pt-BR');
+
+      const next = JSON.parse(JSON.stringify(prev)) as AppData;
+
+      // Flush old page
+      const oldNb = next.notebooks.find(n => n.id === next.activeNb);
+      const oldSec = oldNb?.sections.find(s => s.id === next.activeSec);
+      const oldPg = oldSec?.pages.find(p => p.id === next.activePage);
+      if (oldPg) { oldPg.title = title; oldPg.content = content; oldPg.date = date; }
+
+      // Navigate
+      const nb = next.notebooks.find(n => n.id === next.activeNb);
       const sec = nb?.sections.find(s => s.id === secId);
       const firstPage = sec?.pages[0];
-      return { ...prev, activeSec: secId, activePage: firstPage?.id ?? null };
+      next.activeSec = secId;
+      next.activePage = firstPage?.id ?? null;
+
+      saveData(next);
+      return next;
     });
-  }, [flushEditor, updateData]);
+  }, [stripColorStyles]);
 
   const selectPage = useCallback((pgId: string) => {
-    flushEditor();
-    updateData(prev => ({ ...prev, activePage: pgId }));
-  }, [flushEditor, updateData]);
+    setData(prev => {
+      const title = titleRef.current?.value ?? '';
+      const rawContent = editorRef.current?.innerHTML ?? '';
+      const content = stripColorStyles(rawContent);
+      const date = new Date().toLocaleDateString('pt-BR');
+
+      const next = JSON.parse(JSON.stringify(prev)) as AppData;
+
+      // Flush old page first (save into the OLD activePage, not the new one)
+      const oldNb = next.notebooks.find(n => n.id === next.activeNb);
+      const oldSec = oldNb?.sections.find(s => s.id === next.activeSec);
+      const oldPg = oldSec?.pages.find(p => p.id === next.activePage);
+      if (oldPg) { oldPg.title = title; oldPg.content = content; oldPg.date = date; }
+
+      // Then navigate to the new page
+      next.activePage = pgId;
+
+      saveData(next);
+      return next;
+    });
+  }, [stripColorStyles]);
 
   // CRUD Notebooks
   const createNotebook = useCallback((name: string, color: string) => {
