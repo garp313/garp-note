@@ -103,6 +103,34 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     }
   }, [onAttach]);
 
+  // Paste handler: intercepts CTRL+V before the browser, reads image from
+  // clipboard and inserts it as a base64 <img> tag in the editor.
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItem = items.find(item => item.type.startsWith('image/'));
+
+    if (!imageItem) return; // No image → let the browser handle normal text paste
+
+    e.preventDefault(); // Block the broken native image paste
+
+    const file = imageItem.getAsFile();
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string;
+      if (!src) return;
+      editorRef.current?.focus();
+      document.execCommand(
+        'insertHTML',
+        false,
+        `<img src="${src}" alt="imagem colada" style="max-width:100%;border-radius:6px;margin:8px 0;" />`
+      );
+      handleInput();
+    };
+    reader.readAsDataURL(file);
+  }, [editorRef, handleInput]);
+
   // Remove inline styles injected by browsers
   useEffect(() => {
     const editor = editorRef.current;
@@ -293,6 +321,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
           data-placeholder="Comece a escrever aqui..."
           onInput={handleInput}
           onBlur={handleBlur}
+          onPaste={handlePaste}
         />
       </div>
 
