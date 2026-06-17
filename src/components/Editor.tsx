@@ -148,18 +148,8 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     }
   }, [editorRef]);
 
-  // Expose restoreSelection and insertTextBox to editorRef for parent components
-  useEffect(() => {
-    if (editorRef.current) {
-      (editorRef.current as any).restoreSelection = () => {
-        restoreSelection();
-        focusSelectionTarget();
-      };
-      (editorRef.current as any).insertTextBox = () => {
-        insertTextBox();
-      };
-    }
-  }, [editorRef, restoreSelection, focusSelectionTarget, insertTextBox]);
+  // NOTE: the useEffect that exposes restoreSelection and insertTextBox on editorRef
+  // is placed AFTER insertTextBox is defined (below), to avoid "used before defined" errors.
 
   // Close popups when clicking outside
   useEffect(() => {
@@ -301,6 +291,20 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     document.execCommand('insertHTML', false, wrapperHTML);
     handleInput();
   }, [editorRef, handleInput]);
+
+  // Expose restoreSelection and insertTextBox to editorRef for parent components
+  // (must be placed AFTER insertTextBox is defined)
+  useEffect(() => {
+    if (editorRef.current) {
+      (editorRef.current as any).restoreSelection = () => {
+        restoreSelection();
+        focusSelectionTarget();
+      };
+      (editorRef.current as any).insertTextBox = () => {
+        insertTextBox();
+      };
+    }
+  }, [editorRef, restoreSelection, focusSelectionTarget, insertTextBox]);
 
   // Drag & Drop handlers
   const handleDrag = useCallback((e: React.DragEvent) => {
