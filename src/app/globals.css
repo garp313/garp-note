@@ -844,6 +844,7 @@ body {
 .resizable-text-wrapper {
   background: var(--surface);
   border-radius: 4px;
+  overflow: hidden;
 }
 .resize-handle {
   width: 9px;
@@ -913,11 +914,15 @@ body {
   padding: 8px 12px;
   outline: none;
   min-height: 40px;
+  height: calc(100% - 18px);
+  overflow: auto;
   word-break: break-word;
+  white-space: pre-wrap;
   color: var(--text);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.5;
+  box-sizing: border-box;
 }
 .resizable-text-wrapper .wrapper-delete-btn {
   background: none;
