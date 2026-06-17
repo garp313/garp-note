@@ -20,6 +20,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
+  const lastRangeRef = useRef<Range | null>(null);
 
   const COLOR_PALETTE = [
     '#0f172a','#ef4444','#f97316','#eab308','#22c55e',
@@ -92,6 +93,31 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [onFlush]);
 
+  // Save selection range when user is editing to prevent losing it on select/dropdown click
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        // Only save selection if it's inside the editor content area
+        if (editorRef.current && editorRef.current.contains(range.commonAncestorContainer)) {
+          lastRangeRef.current = range;
+        }
+      }
+    };
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [editorRef]);
+
+  const restoreSelection = useCallback(() => {
+    if (!lastRangeRef.current) return;
+    const selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
+      selection.addRange(lastRangeRef.current);
+    }
+  }, []);
+
   // Close color picker when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -105,14 +131,16 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
 
   // Apply color to selected text
   const applyColor = useCallback((color: string) => {
+    restoreSelection();
     editorRef.current?.focus();
     document.execCommand('foreColor', false, color);
     handleInput();
     setColorPickerOpen(false);
-  }, [editorRef, handleInput]);
+  }, [editorRef, handleInput, restoreSelection]);
 
   // Apply font size (%) to selected text via span wrapping
   const applyFontSize = useCallback((percent: string) => {
+    restoreSelection();
     editorRef.current?.focus();
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
@@ -128,7 +156,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
       range.insertNode(span);
     }
     handleInput();
-  }, [editorRef, handleInput]);
+  }, [editorRef, handleInput, restoreSelection]);
 
   // Drag & Drop handlers
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -307,16 +335,16 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
 
       <div className="editor-topbar">
         <div className="editor-toolbar-group">
-          <button className="fmt-btn" onClick={() => fmt('bold')} title="Negrito">
+          <button className="fmt-btn" onClick={() => fmt('bold')} title="Negrito" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 12h9a4 4 0 0 0 0-8H6v8Z"/><path d="M6 20h10a4 4 0 0 0 0-8H6v8Z"/></svg>
           </button>
-          <button className="fmt-btn" onClick={() => fmt('italic')} title="Itálico">
+          <button className="fmt-btn" onClick={() => fmt('italic')} title="Itálico" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
           </button>
-          <button className="fmt-btn" onClick={() => fmt('underline')} title="Sublinhado">
+          <button className="fmt-btn" onClick={() => fmt('underline')} title="Sublinhado" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
           </button>
-          <button className="fmt-btn" onClick={() => fmt('strikeThrough')} title="Tachado">
+          <button className="fmt-btn" onClick={() => fmt('strikeThrough')} title="Tachado" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><path d="M16 6A5 5 0 0 0 8 9c0 2.2 1.8 3 3.5 3.5"/></svg>
           </button>
 
@@ -326,6 +354,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
               className="fmt-btn color-btn"
               title="Cor do texto"
               onClick={() => setColorPickerOpen(o => !o)}
+              onMouseDown={(e) => e.preventDefault()}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 20h16"/>
@@ -342,6 +371,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
                       style={{ background: c }}
                       title={c}
                       onClick={() => applyColor(c)}
+                      onMouseDown={(e) => e.preventDefault()}
                     />
                   ))}
                 </div>
@@ -386,13 +416,13 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
         <span className="fmt-sep" />
 
         <div className="editor-toolbar-group">
-          <button className="fmt-btn" onClick={() => fmt('insertUnorderedList')} title="Lista com Marcadores">
+          <button className="fmt-btn" onClick={() => fmt('insertUnorderedList')} title="Lista com Marcadores" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           </button>
-          <button className="fmt-btn" onClick={() => fmt('insertOrderedList')} title="Lista Numerada">
+          <button className="fmt-btn" onClick={() => fmt('insertOrderedList')} title="Lista Numerada" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
           </button>
-          <button className="fmt-btn" onClick={insertCheckbox} title="Caixa de Seleção">
+          <button className="fmt-btn" onClick={insertCheckbox} title="Caixa de Seleção" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="m9 12 2 2 4-4"/></svg>
           </button>
         </div>
@@ -400,13 +430,13 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
         <span className="fmt-sep" />
 
         <div className="editor-toolbar-group">
-          <button className="fmt-btn" onClick={insertCode} title="Bloco de Código">
+          <button className="fmt-btn" onClick={insertCode} title="Bloco de Código" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           </button>
-          <button className="fmt-btn" onClick={insertQuote} title="Citação">
+          <button className="fmt-btn" onClick={insertQuote} title="Citação" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3a5 5 0 0 0-4 2 5 5 0 0 0-4-2H4v13h4a5 5 0 0 1 4 2 5 5 0 0 1 4-2h4V3h-4Z"/><path d="M12 3v15"/></svg>
           </button>
-          <button className="fmt-btn" onClick={onMathOpen} title="Fórmula Matemática">
+          <button className="fmt-btn" onClick={onMathOpen} title="Fórmula Matemática" onMouseDown={(e) => e.preventDefault()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 4H6L12 12L6 20H18"/></svg>
           </button>
         </div>
