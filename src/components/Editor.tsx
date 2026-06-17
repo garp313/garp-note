@@ -18,6 +18,15 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
   const [prevPageId, setPrevPageId] = useState<string | undefined>(undefined);
   const [dragActive, setDragActive] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
+
+  const COLOR_PALETTE = [
+    '#0f172a','#ef4444','#f97316','#eab308','#22c55e',
+    '#3b82f6','#6366f1','#a855f7','#ec4899','#14b8a6',
+    '#64748b','#dc2626','#ea580c','#ca8a04','#16a34a',
+    '#2563eb','#4f46e5','#9333ea','#db2777','#0d9488',
+  ];
 
   // Debounced auto-save
   const handleInput = useCallback(() => {
@@ -83,6 +92,44 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [onFlush]);
 
+  // Close color picker when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (colorPickerRef.current && !colorPickerRef.current.contains(e.target as Node)) {
+        setColorPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Apply color to selected text
+  const applyColor = useCallback((color: string) => {
+    editorRef.current?.focus();
+    document.execCommand('foreColor', false, color);
+    handleInput();
+    setColorPickerOpen(false);
+  }, [editorRef, handleInput]);
+
+  // Apply font size (%) to selected text via span wrapping
+  const applyFontSize = useCallback((percent: string) => {
+    editorRef.current?.focus();
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    const span = document.createElement('span');
+    span.style.fontSize = percent;
+    try {
+      range.surroundContents(span);
+    } catch {
+      // surroundContents fails for multi-element selections
+      const fragment = range.extractContents();
+      span.appendChild(fragment);
+      range.insertNode(span);
+    }
+    handleInput();
+  }, [editorRef, handleInput]);
+
   // Drag & Drop handlers
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -109,7 +156,28 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     const items = Array.from(e.clipboardData.items);
     const imageItem = items.find(item => item.type.startsWith('image/'));
 
-    if (!imageItem) return; // No image → let the browser handle normal text paste
+    if (!imageItem) {
+      // No image — strip injected colors from pasted HTML text
+      const html = e.clipboardData.getData('text/html');
+      if (html) {
+        e.preventDefault();
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const walk = (el: Element) => {
+          if (el instanceof HTMLElement) {
+            el.style.removeProperty('color');
+            el.style.removeProperty('background-color');
+            el.style.removeProperty('background');
+            if (el.getAttribute('style') === '') el.removeAttribute('style');
+          }
+          Array.from(el.children).forEach(walk);
+        };
+        Array.from(tmp.children).forEach(walk);
+        document.execCommand('insertHTML', false, tmp.innerHTML);
+        handleInput();
+      }
+      return;
+    }
 
     e.preventDefault(); // Block the broken native image paste
 
@@ -136,10 +204,11 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     const editor = editorRef.current;
     if (!editor) return;
 
+    // Only strip background colors injected by the browser (not user-set text colors).
+    // User-set text colors are applied intentionally via the color picker.
     const stripInlineColors = (node: Node) => {
       if (node.nodeType !== Node.ELEMENT_NODE) return;
       const el = node as HTMLElement;
-      el.style.removeProperty('color');
       el.style.removeProperty('background-color');
       el.style.removeProperty('background');
       if (el.getAttribute('style') === '') el.removeAttribute('style');
@@ -250,6 +319,35 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
           <button className="fmt-btn" onClick={() => fmt('strikeThrough')} title="Tachado">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><path d="M16 6A5 5 0 0 0 8 9c0 2.2 1.8 3 3.5 3.5"/></svg>
           </button>
+
+          {/* Color picker */}
+          <div className="color-picker-wrapper" ref={colorPickerRef}>
+            <button
+              className="fmt-btn color-btn"
+              title="Cor do texto"
+              onClick={() => setColorPickerOpen(o => !o)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20h16"/>
+                <text x="5" y="16" fontSize="14" fontWeight="bold" stroke="none" fill="currentColor" fontFamily="sans-serif">A</text>
+              </svg>
+            </button>
+            {colorPickerOpen && (
+              <div className="color-picker-popup">
+                <div className="color-picker-grid">
+                  {COLOR_PALETTE.map(c => (
+                    <button
+                      key={c}
+                      className="color-swatch"
+                      style={{ background: c }}
+                      title={c}
+                      onClick={() => applyColor(c)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <span className="fmt-sep" />
@@ -265,6 +363,23 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
             <option value="h2">Título Médio (H2)</option>
             <option value="h3">Subtítulo (H3)</option>
             <option value="p">Texto Normal</option>
+          </select>
+
+          <select
+            className="fmt-select"
+            onChange={e => { applyFontSize(e.target.value); e.target.value = ''; }}
+            defaultValue=""
+            title="Tamanho do texto"
+          >
+            <option value="" disabled>Tamanho %</option>
+            <option value="75%">75%</option>
+            <option value="90%">90%</option>
+            <option value="100%">100%</option>
+            <option value="110%">110%</option>
+            <option value="125%">125%</option>
+            <option value="150%">150%</option>
+            <option value="175%">175%</option>
+            <option value="200%">200%</option>
           </select>
         </div>
 

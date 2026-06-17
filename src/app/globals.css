@@ -683,6 +683,51 @@ body {
   border-color: var(--muted);
 }
 
+/* Color picker */
+.color-picker-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.color-btn {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font);
+  width: 28px;
+  height: 28px;
+}
+.color-picker-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  z-index: 200;
+  animation: fadeIn 0.12s ease-out;
+}
+.color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 20px);
+  gap: 4px;
+}
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+  outline: none;
+  padding: 0;
+}
+.color-swatch:hover {
+  transform: scale(1.2);
+  border-color: var(--text);
+}
+
 .export-group {
   margin-left: auto;
   display: flex;
