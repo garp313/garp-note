@@ -132,6 +132,32 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     }
   }, []);
 
+  const focusSelectionTarget = useCallback(() => {
+    if (!lastRangeRef.current) return;
+    const node = lastRangeRef.current.commonAncestorContainer;
+    const element = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
+    if (element) {
+      const editable = element.closest('[contenteditable="true"]') as HTMLElement;
+      if (editable) {
+        editable.focus();
+      } else {
+        editorRef.current?.focus();
+      }
+    } else {
+      editorRef.current?.focus();
+    }
+  }, [editorRef]);
+
+  // Expose restoreSelection to editorRef for parent components
+  useEffect(() => {
+    if (editorRef.current) {
+      (editorRef.current as any).restoreSelection = () => {
+        restoreSelection();
+        focusSelectionTarget();
+      };
+    }
+  }, [editorRef, restoreSelection, focusSelectionTarget]);
+
   // Close popups when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -152,16 +178,16 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
   // Apply color to selected text
   const applyColor = useCallback((color: string) => {
     restoreSelection();
-    editorRef.current?.focus();
+    focusSelectionTarget();
     document.execCommand('foreColor', false, color);
     handleInput();
     setColorPickerOpen(false);
-  }, [editorRef, handleInput, restoreSelection]);
+  }, [focusSelectionTarget, handleInput, restoreSelection]);
 
   // Apply font size (%) to selected text using a robust execCommand + node replacement strategy
   const applyFontSize = useCallback((percent: string) => {
     restoreSelection();
-    editorRef.current?.focus();
+    focusSelectionTarget();
     document.execCommand('fontSize', false, '7');
     if (editorRef.current) {
       const fonts = editorRef.current.querySelectorAll('font[size="7"]');
@@ -175,20 +201,21 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
       });
     }
     handleInput();
-  }, [editorRef, handleInput, restoreSelection]);
+  }, [editorRef, focusSelectionTarget, handleInput, restoreSelection]);
 
   // Apply background (highlight) color to selected text
   const applyHighlight = useCallback((color: string) => {
     restoreSelection();
-    editorRef.current?.focus();
+    focusSelectionTarget();
     document.execCommand('backColor', false, color);
     handleInput();
     setHighlighterOpen(false);
-  }, [editorRef, handleInput, restoreSelection]);
+  }, [focusSelectionTarget, handleInput, restoreSelection]);
 
   // Insert a custom 3x3 table (OneNote style)
   const insertTable = useCallback(() => {
-    editorRef.current?.focus();
+    restoreSelection();
+    focusSelectionTarget();
     const tableHTML = `
       <table style="width:100%; border-collapse:collapse; margin:16px 0;">
         <thead>
@@ -214,11 +241,12 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     `;
     document.execCommand('insertHTML', false, tableHTML);
     handleInput();
-  }, [editorRef, handleInput]);
+  }, [focusSelectionTarget, handleInput, restoreSelection]);
 
   // Insert custom OneNote-like tags (⭐️ Important, ❓ Question)
   const insertTag = useCallback((type: 'star' | 'question') => {
-    editorRef.current?.focus();
+    restoreSelection();
+    focusSelectionTarget();
     let tagHTML = '';
     if (type === 'star') {
       tagHTML = '<span style="background: rgba(234, 179, 8, 0.1); border-left: 3px solid #eab308; padding: 2px 6px; margin: 2px 0; border-radius: 2px; font-weight: 500; font-size: 13px; color: var(--text);">⭐️ Importante: </span>&nbsp;';
@@ -227,7 +255,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     }
     document.execCommand('insertHTML', false, tagHTML);
     handleInput();
-  }, [editorRef, handleInput]);
+  }, [focusSelectionTarget, handleInput, restoreSelection]);
 
   // Insert a custom draggable and resizable text box (OneNote style)
   const insertTextBox = useCallback(() => {
@@ -618,23 +646,26 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
   }, [editorRef, handleInput]);
 
   const fmt = useCallback((cmd: string, value?: string) => {
-    editorRef.current?.focus();
+    restoreSelection();
+    focusSelectionTarget();
     document.execCommand(cmd, false, value);
     handleInput();
-  }, [editorRef, handleInput]);
+  }, [focusSelectionTarget, handleInput, restoreSelection]);
 
   const fmtBlock = useCallback((tag: string) => {
     if (!tag) return;
-    editorRef.current?.focus();
+    restoreSelection();
+    focusSelectionTarget();
     document.execCommand('formatBlock', false, tag);
     handleInput();
-  }, [editorRef, handleInput]);
+  }, [focusSelectionTarget, handleInput, restoreSelection]);
 
   const insertHTML = useCallback((html: string) => {
-    editorRef.current?.focus();
+    restoreSelection();
+    focusSelectionTarget();
     document.execCommand('insertHTML', false, html);
     handleInput();
-  }, [editorRef, handleInput]);
+  }, [focusSelectionTarget, handleInput, restoreSelection]);
 
   const insertCheckbox = () => insertHTML('<label><input type="checkbox"> </label><br>');
   const insertCode = () => insertHTML('<pre>// código aqui</pre>');

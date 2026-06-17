@@ -167,7 +167,11 @@ export default function NoteFlowPage() {
   const [mathVal, setMathVal] = useState('');
   const insertMath = () => {
     if (!mathVal.trim()) { setMathModal(false); return; }
-    editorRef.current?.focus();
+    if (editorRef.current && (editorRef.current as any).restoreSelection) {
+      (editorRef.current as any).restoreSelection();
+    } else {
+      editorRef.current?.focus();
+    }
     document.execCommand('insertHTML', false, `<div class="math-block">${mathVal}</div>`);
     flushEditor();
     setMathModal(false); setMathVal('');
@@ -231,7 +235,11 @@ export default function NoteFlowPage() {
   const handleAttach = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = e => {
-      editorRef.current?.focus();
+      if (editorRef.current && (editorRef.current as any).restoreSelection) {
+        (editorRef.current as any).restoreSelection();
+      } else {
+        editorRef.current?.focus();
+      }
       if (file.type.startsWith('image/')) {
         const editor = editorRef.current;
         let top = 20;
