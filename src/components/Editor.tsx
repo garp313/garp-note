@@ -229,6 +229,45 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     handleInput();
   }, [editorRef, handleInput]);
 
+  // Insert a custom draggable and resizable text box (OneNote style)
+  const insertTextBox = useCallback(() => {
+    editorRef.current?.focus();
+    const editor = editorRef.current;
+    let top = 50;
+    if (editor) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        const editorRect = editor.getBoundingClientRect();
+        if (rect.top !== 0 && rect.left !== 0) {
+          top = rect.top - editorRect.top + editor.scrollTop;
+        } else {
+          top = editor.scrollTop + 50;
+        }
+      } else {
+        top = editor.scrollTop + 50;
+      }
+    }
+
+    const wrapperHTML = `
+      <div class="resizable-text-wrapper" contenteditable="false" style="position: absolute; left: 50px; top: ${top}px; width: 250px; min-height: 60px; border: 1.5px solid transparent; box-sizing: border-box; z-index: 10; display: inline-block;">
+        <div class="text-drag-handle" style="height: 14px; background: var(--panel); border-radius: 4px 4px 0 0; cursor: move; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border);">
+          <div style="width: 24px; height: 4px; border-top: 1px double var(--muted); border-bottom: 1px solid var(--muted); opacity: 0.6;"></div>
+        </div>
+        <div class="text-content" contenteditable="true" style="padding: 8px 12px; outline: none; min-height: 40px; word-break: break-word; color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5;">
+          Nova caixa de texto...
+        </div>
+        <div class="resize-handle top-left"></div>
+        <div class="resize-handle top-right"></div>
+        <div class="resize-handle bottom-left"></div>
+        <div class="resize-handle bottom-right"></div>
+      </div>
+    `;
+    document.execCommand('insertHTML', false, wrapperHTML);
+    handleInput();
+  }, [editorRef, handleInput]);
+
   // Drag & Drop handlers
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -341,6 +380,15 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
       if (node.nodeType !== Node.ELEMENT_NODE) return;
       const el = node as HTMLElement;
       
+      if (
+        el.classList.contains('resize-handle') ||
+        el.classList.contains('text-drag-handle') ||
+        el.classList.contains('resizable-text-wrapper') ||
+        el.classList.contains('resizable-image-wrapper')
+      ) {
+        return;
+      }
+
       const bg = el.style.backgroundColor?.toLowerCase();
       const hasAllowedBg = ALLOWED_BACKGROUNDS.some(allowed => bg.includes(allowed));
       
@@ -371,7 +419,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
     return () => observer.disconnect();
   }, [editorRef]);
 
-  // Draggable and Resizable images handler (OneNote style)
+  // Draggable and Resizable images/text boxes handler (OneNote style)
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -395,7 +443,7 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
         e.preventDefault();
         e.stopPropagation();
         isResizing = true;
-        activeElement = target.closest('.resizable-image-wrapper');
+        activeElement = target.closest('.resizable-image-wrapper, .resizable-text-wrapper');
         if (!activeElement) return;
         
         if (target.classList.contains('bottom-right')) resizeDir = 'br';
@@ -413,18 +461,22 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
         document.addEventListener('pointermove', handlePointerMove);
         document.addEventListener('pointerup', handlePointerUp);
         
-        editor.querySelectorAll('.resizable-image-wrapper').forEach(el => el.classList.remove('selected'));
+        editor.querySelectorAll('.resizable-image-wrapper, .resizable-text-wrapper').forEach(el => el.classList.remove('selected'));
         activeElement.classList.add('selected');
         return;
       }
       
-      // 2. Check if we clicked the image wrapper itself
-      const wrapper = target.closest('.resizable-image-wrapper') as HTMLElement;
-      if (wrapper) {
+      // 2. Check if we clicked a drag handle (text drag handle, or image wrapper itself)
+      const textDragHandle = target.closest('.text-drag-handle');
+      const imageWrapper = target.closest('.resizable-image-wrapper') as HTMLElement;
+      
+      if (textDragHandle || imageWrapper) {
         e.preventDefault();
         e.stopPropagation();
         isDragging = true;
-        activeElement = wrapper;
+        activeElement = (textDragHandle ? target.closest('.resizable-text-wrapper') : imageWrapper) as HTMLElement;
+        if (!activeElement) return;
+
         startX = e.clientX;
         startY = e.clientY;
         startLeft = activeElement.offsetLeft;
@@ -433,13 +485,24 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
         document.addEventListener('pointermove', handlePointerMove);
         document.addEventListener('pointerup', handlePointerUp);
         
-        editor.querySelectorAll('.resizable-image-wrapper').forEach(el => el.classList.remove('selected'));
+        editor.querySelectorAll('.resizable-image-wrapper, .resizable-text-wrapper').forEach(el => el.classList.remove('selected'));
         activeElement.classList.add('selected');
+        return;
+      }
+
+      // 3. Check if we clicked inside a text box (to focus/type) but not drag/resize
+      const textWrapper = target.closest('.resizable-text-wrapper') as HTMLElement;
+      if (textWrapper) {
+        // Just select this text wrapper and allow normal text interaction
+        editor.querySelectorAll('.resizable-image-wrapper, .resizable-text-wrapper').forEach(el => {
+          if (el !== textWrapper) el.classList.remove('selected');
+        });
+        textWrapper.classList.add('selected');
         return;
       }
       
       // Clicked elsewhere - remove selection outline
-      editor.querySelectorAll('.resizable-image-wrapper').forEach(el => el.classList.remove('selected'));
+      editor.querySelectorAll('.resizable-image-wrapper, .resizable-text-wrapper').forEach(el => el.classList.remove('selected'));
     };
 
     const handlePointerMove = (e: PointerEvent) => {
@@ -497,9 +560,58 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
       handleInput(); // Auto-save updated position/size!
     };
 
+    const handleDblClick = (e: MouseEvent) => {
+      const targetEl = e.target as HTMLElement;
+      // Only trigger if clicking directly on the editor-content background (not on existing elements/wrappers)
+      if (targetEl.classList.contains('editor-content')) {
+        e.preventDefault();
+        const editorRect = targetEl.getBoundingClientRect();
+        const left = e.clientX - editorRect.left;
+        const top = e.clientY - editorRect.top + targetEl.scrollTop;
+
+        targetEl.focus();
+
+        const wrapperHTML = `
+          <div class="resizable-text-wrapper" contenteditable="false" style="position: absolute; left: ${left}px; top: ${top}px; width: 250px; min-height: 60px; border: 1.5px solid transparent; box-sizing: border-box; z-index: 10; display: inline-block;">
+            <div class="text-drag-handle" style="height: 14px; background: var(--panel); border-radius: 4px 4px 0 0; cursor: move; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border);">
+              <div style="width: 24px; height: 4px; border-top: 1px double var(--muted); border-bottom: 1px solid var(--muted); opacity: 0.6;"></div>
+            </div>
+            <div class="text-content" contenteditable="true" style="padding: 8px 12px; outline: none; min-height: 40px; word-break: break-word; color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5;">
+              Texto...
+            </div>
+            <div class="resize-handle top-left"></div>
+            <div class="resize-handle top-right"></div>
+            <div class="resize-handle bottom-left"></div>
+            <div class="resize-handle bottom-right"></div>
+          </div>
+        `.trim();
+
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = wrapperHTML;
+        const wrapperEl = tempDiv.firstChild as HTMLElement;
+        targetEl.appendChild(wrapperEl);
+
+        const textContent = wrapperEl.querySelector('.text-content') as HTMLElement;
+        if (textContent) {
+          textContent.focus();
+          const range = document.createRange();
+          range.selectNodeContents(textContent);
+          const sel = window.getSelection();
+          if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+
+        handleInput();
+      }
+    };
+
     editor.addEventListener('pointerdown', handlePointerDown);
+    editor.addEventListener('dblclick', handleDblClick);
     return () => {
       editor.removeEventListener('pointerdown', handlePointerDown);
+      editor.removeEventListener('dblclick', handleDblClick);
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
     };
@@ -743,6 +855,14 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 3h18v18H3z"/>
               <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+            </svg>
+          </button>
+
+          {/* Floating Textbox */}
+          <button className="fmt-btn" onClick={insertTextBox} title="Caixa de Texto Flutuante" onMouseDown={(e) => e.preventDefault()}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <path d="M9 17V7h6M9 7h6M12 7v10"/>
             </svg>
           </button>
         </div>
