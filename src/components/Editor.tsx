@@ -271,8 +271,21 @@ export function Editor({ page, editorRef, titleRef, onFlush, onSave, onAttach, o
       }
     }
 
+    // Compute left position based on selection (similar to top)
+    let left = editor ? editor.scrollLeft : 0;
+    if (editor) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const r = sel.getRangeAt(0);
+        const rect = r.getBoundingClientRect();
+        const editorRect = editor.getBoundingClientRect();
+        if (rect.left !== 0 && rect.top !== 0) {
+          left = rect.left - editorRect.left + editor.scrollLeft;
+        }
+      }
+    }
     const wrapperHTML = `
-      <div class="resizable-text-wrapper" contenteditable="false" style="position: absolute; left: 50px; top: ${top}px; width: 250px; min-height: 60px; border: 1.5px solid transparent; box-sizing: border-box; z-index: 10; display: inline-block;">
+      <div class="resizable-text-wrapper" contenteditable="false" style="position: absolute; left: ${left}px; top: ${top}px; width: 250px; min-height: 60px; border: 1.5px solid transparent; box-sizing: border-box; z-index: 10; display: inline-block;">
         <div class="text-drag-handle">
           <div class="drag-dots"></div>
           <button class="wrapper-delete-btn" title="Apagar caixa de texto">

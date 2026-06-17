@@ -911,7 +911,7 @@ body {
   transform: translateX(10px);
 }
 .text-content {
-  padding: 8px 12px;
+  padding: 4px 0;
   outline: none;
   min-height: 40px;
   height: calc(100% - 18px);
